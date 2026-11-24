@@ -72,7 +72,7 @@ video{width:100%;max-height:65vh;background:#000}
   </div>
   <div>© 2026 TubeMovies · Movie catalogue and video platform</div>
 </footer>
-<div class="modal" id="adminModal"><div class="box"><button class="close" onclick="closeModal('adminModal')">×</button><h2>Admin Login / Upload</h2><p class="note">Sign in with your TubeMovies Appwrite Admin account. Only the configured admin can publish videos.</p><input id="email" type="email" placeholder="Admin email"><input id="password" type="password" placeholder="Password"><button onclick="loginAdmin()">Login</button><button class="secondary" onclick="logoutAdmin()">Logout</button><div id="adminArea"><hr><h3>Upload a Movie or Series Episode</h3><select id="contentType" onchange="toggleEpisodeFields()"><option value="movie">Movie</option><option value="episode">Web Series Episode</option></select><input id="movieTitle" placeholder="Movie title / Series name"><div id="episodeFields" style="display:none"><input id="episodeTitle" placeholder="Episode title"><input id="seasonNumber" type="number" min="1" placeholder="Season number (e.g. 1)"><input id="episodeNumber" type="number" min="1" placeholder="Episode number (e.g. 1)"></div><select id="movieCategory"><option>Hindi</option><option>Bollywood</option><option>Hollywood</option><option>Dual Audio</option><option>South Indian</option><option>Tamil</option><option>Telugu</option><option>Web Series</option></select><input id="movieYear" type="number" placeholder="Year (e.g. 2026)"><input id="movieLanguage" placeholder="Language (e.g. Hindi)"><input id="movieQuality" placeholder="Quality (e.g. 720p)"><textarea id="movieDescription" rows="3" placeholder="Description (optional)"></textarea><input id="posterFile" type="file" accept="image/*"><input id="videoFile" type="file" accept="video/mp4,video/webm,video/ogg"><p class="note">Large video files may take time and require sufficient storage/bandwidth. Use only content you have rights to publish.</p><button onclick="uploadMovie()">Upload & Publish</button></div><div class="status" id="status"></div><p class="note">Use only videos and posters you own or are authorised to distribute. Appwrite Free storage currently limits each file to 50 MB in this bucket.</p></div></div>
+<div class="modal" id="adminModal"><div class="box"><button class="close" onclick="closeModal('adminModal')">×</button><h2>Admin Login / Upload</h2><p class="note">Sign in with your TubeMovies Appwrite Admin account. Only the configured admin can publish videos.</p><input id="email" type="email" placeholder="Admin email"><input id="password" type="password" placeholder="Password"><button onclick="loginAdmin()">Login</button><button class="secondary" onclick="logoutAdmin()">Logout</button><div id="adminArea"><hr><h3>Upload a Movie or Series Episode</h3><select id="contentType" onchange="toggleEpisodeFields()"><option value="movie">Movie</option><option value="episode">Web Series Episode</option></select><input id="movieTitle" placeholder="Movie title / Series name"><div id="episodeFields" style="display:none"><input id="episodeTitle" placeholder="Episode title"><input id="seasonNumber" type="number" min="1" placeholder="Season number (e.g. 1)"><input id="episodeNumber" type="number" min="1" placeholder="Episode number (e.g. 1)"></div><select id="movieCategory"><option>Hindi</option><option>Bollywood</option><option>Hollywood</option><option>Dual Audio</option><option>South Indian</option><option>Tamil</option><option>Telugu</option><option>Web Series</option></select><input id="movieYear" type="number" placeholder="Year (e.g. 2026)"><input id="movieLanguage" placeholder="Language (e.g. Hindi)"><input id="movieQuality" placeholder="Quality (e.g. 720p)"><textarea id="movieDescription" rows="3" placeholder="Description (optional)"></textarea><input id="posterFile" type="file" accept="image/*"><input id="videoFile" type="file" accept="video/mp4,video/webm,video/ogg"><p class="note">Large video files may take time and require sufficient storage/bandwidth. Use only content you have rights to publish.</p><button onclick="uploadMovie()">Upload & Publish</button></div><div class="status" id="status"></div><p class="note">Video uploads use Cloudflare R2 multipart transfer (up to 100 GB per video). Posters still use Appwrite Storage and must fit its file-size limit. Upload only content you own or are authorised to distribute.</p></div></div>
 <div class="modal" id="watchModal"><div class="box"><button class="close" onclick="closeModal('watchModal')">×</button><h2 id="watchTitle">Watch</h2><video id="player" controls playsinline></video></div></div>
 <script src="https://cdn.jsdelivr.net/npm/appwrite@29.0.0"></script>
 <script>
@@ -83,6 +83,10 @@ const DATABASE_ID = "6b056c4100002013df8a";
 const TABLE_ID = "6b056bd7002eeb65bc10";
 const BUCKET_ID = "6b056f9f003cbb25d977";
 const ADMIN_USER_ID = "6b0575fe00266689ca80";
+const R2_WORKER_URL = "https://tubemovies-upload.tubemoviessupport-com.workers.dev";
+const R2_PUBLIC_BASE_URL = "https://pub-2d8fdc9ce35f489299d6464ef0d725d3.r2.dev";
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024 * 1024;
+const R2_PART_BYTES = 64 * 1024 * 1024;
 const client = new Appwrite.Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID);
 const account = new Appwrite.Account(client);
 const tablesDB = new Appwrite.TablesDB(client);
@@ -96,8 +100,8 @@ function openAdmin(){document.getElementById('adminModal').classList.add('open')
 function closeModal(id){document.getElementById(id).classList.remove('open');if(id==='watchModal'){let v=document.getElementById('player');v.pause();v.removeAttribute('src');v.load()}}
 function setCategory(c){activeCategory=c;document.querySelectorAll('.categories button').forEach(b=>b.classList.toggle('active',b.textContent.trim().toLowerCase()===(c==='All'?'all':c.toLowerCase())));render()}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function fileView(fileId){return fileId?storage.getFileView({bucketId:BUCKET_ID,fileId}):''}
-function fileDownload(fileId){return fileId?storage.getFileDownload({bucketId:BUCKET_ID,fileId}):'#'}
+function fileView(fileId){if(!fileId)return '';if(/^https?:\/\//i.test(fileId))return fileId;return storage.getFileView({bucketId:BUCKET_ID,fileId})}
+function fileDownload(fileId){if(!fileId)return '#';if(/^https?:\/\//i.test(fileId))return fileId;return storage.getFileDownload({bucketId:BUCKET_ID,fileId})}
 async function loadMovies(){
   try{
     const result=await tablesDB.listRows({databaseId:DATABASE_ID,tableId:TABLE_ID,queries:[Query.orderDesc('$createdAt'),Query.limit(100)]});
@@ -123,6 +127,44 @@ async function loginAdmin(){
 }
 async function logoutAdmin(){try{await account.deleteSession({sessionId:'current'})}catch(e){}isAdmin=false;currentUser=null;document.getElementById('adminArea').style.display='none';document.getElementById('password').value='';statusMsg('Signed out.')}
 function statusMsg(t){document.getElementById('status').textContent=t}
+async function uploadVideoToR2(file){
+  const jwtResult = await account.createJWT();
+  const authHeaders = { 'X-Appwrite-JWT': jwtResult.jwt };
+  const initResponse = await fetch(`${R2_WORKER_URL}/?action=init`, {
+    method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename: file.name, contentType: file.type || 'video/mp4', size: file.size })
+  });
+  const initData = await initResponse.json();
+  if (!initResponse.ok) throw new Error(initData.error || 'Could not start R2 upload');
+  const { key, uploadId } = initData;
+  const parts = [];
+  try {
+    const totalParts = Math.ceil(file.size / R2_PART_BYTES);
+    for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
+      const start = (partNumber - 1) * R2_PART_BYTES;
+      const end = Math.min(start + R2_PART_BYTES, file.size);
+      const chunk = file.slice(start, end);
+      statusMsg(`Uploading video: part ${partNumber}/${totalParts} (${Math.round(end / file.size * 100)}%)`);
+      const partResponse = await fetch(`${R2_WORKER_URL}/?action=part&key=${encodeURIComponent(key)}&uploadId=${encodeURIComponent(uploadId)}&partNumber=${partNumber}`, {
+        method: 'POST', headers: authHeaders, body: chunk
+      });
+      const partData = await partResponse.json();
+      if (!partResponse.ok) throw new Error(partData.error || `Upload failed at part ${partNumber}`);
+      parts.push({ partNumber, etag: partData.etag });
+    }
+    statusMsg('Finishing video upload…');
+    const completeResponse = await fetch(`${R2_WORKER_URL}/?action=complete`, {
+      method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, uploadId, parts })
+    });
+    const completeData = await completeResponse.json();
+    if (!completeResponse.ok) throw new Error(completeData.error || 'Could not finish R2 upload');
+    return `${R2_PUBLIC_BASE_URL}/${key}`;
+  } catch (error) {
+    // Keep incomplete multipart uploads for diagnosis/retry; they can be aborted from the R2 API if needed.
+    throw error;
+  }
+}
 async function uploadMovie(){
   if(!isAdmin||!currentUser||currentUser.$id!==ADMIN_USER_ID){statusMsg('Please sign in with the authorised admin account first.');return}
   const title=document.getElementById('movieTitle').value.trim(),category=document.getElementById('movieCategory').value,contentType=document.getElementById('contentType').value;
@@ -132,18 +174,18 @@ async function uploadMovie(){
   const poster=document.getElementById('posterFile').files[0],video=document.getElementById('videoFile').files[0];
   if(!title||!video){statusMsg('Enter a title and choose a video file.');return}
   if(contentType==='episode'&&(!episodeTitle||!season||!episodeNumber)){statusMsg('For an episode, enter episode title, season number and episode number.');return}
-  if(video.size>50*1024*1024||(poster&&poster.size>50*1024*1024)){statusMsg('This Appwrite bucket currently allows files up to 50 MB. Choose a smaller authorised file.');return}
-  if(!['video/mp4','video/webm','video/ogg'].includes(video.type)){statusMsg('Please choose an MP4, WebM, or OGG video.');return}
-  let posterId=null,videoId=null;
+  if(video.size>MAX_VIDEO_BYTES){statusMsg('Video exceeds the 100 GB per-file limit.');return}
+  if(poster&&poster.size>50*1024*1024){statusMsg('Poster exceeds the current Appwrite file limit of 50 MB.');return}
+  let posterId=null,videoUrl=null;
   try{
-    statusMsg('Uploading video… please keep this page open.');
-    const uploadedVideo=await storage.createFile({bucketId:BUCKET_ID,fileId:ID.unique(),file:video});videoId=uploadedVideo.$id;
-    if(poster){statusMsg('Uploading poster…');const uploadedPoster=await storage.createFile({bucketId:BUCKET_ID,fileId:ID.unique(),file:poster});posterId=uploadedPoster.$id}
+    statusMsg('Starting secure Cloudflare R2 upload…');
+    videoUrl=await uploadVideoToR2(video);
+    if(poster){statusMsg('Uploading poster to Appwrite…');const uploadedPoster=await storage.createFile({bucketId:BUCKET_ID,fileId:ID.unique(),file:poster});posterId=uploadedPoster.$id}
     statusMsg('Saving movie details…');
-    await tablesDB.createRow({databaseId:DATABASE_ID,tableId:TABLE_ID,rowId:ID.unique(),data:{title,year,language,poster:posterId||'',video_url:videoId,download_url:videoId,description,category,quality,content_type:contentType,series_title:contentType==='episode'?title:'',season:contentType==='episode'?season:null,episode_number:contentType==='episode'?episodeNumber:null,episode_title:contentType==='episode'?episodeTitle:''}});
+    await tablesDB.createRow({databaseId:DATABASE_ID,tableId:TABLE_ID,rowId:ID.unique(),data:{title,year,language,poster:posterId||'',video_url:videoUrl,download_url:videoUrl,description,category,quality,content_type:contentType,series_title:contentType==='episode'?title:'',season:contentType==='episode'?season:null,episode_number:contentType==='episode'?episodeNumber:null,episode_title:contentType==='episode'?episodeTitle:''}});
     ['movieTitle','movieYear','movieLanguage','movieQuality','movieDescription','videoFile','posterFile','episodeTitle','seasonNumber','episodeNumber'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('contentType').value='movie';toggleEpisodeFields();statusMsg('Published! Visitors can now view this authorised title.');await loadMovies();
-  }catch(error){console.error(error);statusMsg('Upload/save failed: '+(error.message||'Check bucket and table permissions.'))}
+    document.getElementById('contentType').value='movie';toggleEpisodeFields();statusMsg('Published! Visitors can now watch and download this authorised title.');await loadMovies();
+  }catch(error){console.error(error);statusMsg('Upload/save failed: '+(error.message||'Check Worker, Appwrite permissions and R2 settings.'))}
 }
 function watchMovie(id){const m=allMovies.find(x=>x.$id===id);if(!m)return;document.getElementById('watchTitle').textContent=m.title;const v=document.getElementById('player');v.src=fileView(m.video_url);document.getElementById('watchModal').classList.add('open');v.play().catch(()=>{})}
 loadMovies();
