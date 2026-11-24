@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101318"><title>TubeMovies — Movies & Web Series</title>
+<style>
+:root{--bg:#0c0d10;--head:#20252c;--red:#e50935;--green:#19e51e;--gold:#f4bd22;--muted:#aeb3bd}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#f7f7f7;font-family:Arial,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--head);height:92px;display:flex;align-items:center;justify-content:space-between;padding:0 25px;box-shadow:0 2px 12px #0008}
+.menu,.search-toggle{background:none;border:2px solid #eee;color:#fff;border-radius:5px;font-size:27px;width:54px;height:54px;cursor:pointer}
+.brand{font-size:clamp(25px,5vw,48px);font-weight:1000;letter-spacing:1px;color:#ffc21b;text-shadow:2px 2px #8b4d00,0 0 10px #eaa400}
+.search-toggle{border:0;font-size:34px}.searchbar{display:none;background:#171a20;padding:18px 5%;}.searchbar.open{display:flex}.searchbar input{width:100%;padding:15px;border-radius:8px;border:1px solid #999;background:#0e1015;color:#fff;font-size:17px}
+.header-tools{display:flex;align-items:center;gap:8px;position:relative}
+.dots-toggle{background:none;border:0;color:#fff;font-size:35px;line-height:1;width:42px;height:50px;cursor:pointer}
+.more-menu{display:none;position:absolute;right:0;top:58px;min-width:205px;background:#1b2029;border:1px solid #465064;border-radius:9px;padding:8px;box-shadow:0 10px 28px #000b;z-index:15}
+.more-menu.open{display:block}
+.more-menu button{width:100%;text-align:left;background:transparent;border:0;color:#fff;padding:13px 12px;border-radius:6px;font-size:15px;cursor:pointer}
+.more-menu button:hover{background:#303847}
+.drawer{display:none;position:fixed;inset:0 auto 0 0;width:min(78%,340px);z-index:10;background:#11151cF5;padding:24px;box-shadow:0 0 0 100vmax #0009}
+.drawer.open{display:block}.drawer button{float:right;background:none;color:white;border:0;font-size:30px}.drawer a{display:block;color:#fff;text-decoration:none;font-size:21px;margin:30px 0}.drawer a:hover{color:var(--green)}
+main{max-width:1200px;margin:auto;padding:20px 22px 50px}
+.searchhero{margin:8px 0 28px}.searchhero input{width:100%;padding:17px 20px;border:2px solid #aaa;border-radius:7px;background:#101116;color:#fff;font-size:19px}
+.quicklinks,.categories{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin:18px 0 26px}
+.quicklinks a,.categories button{color:white;text-decoration:none;border:0;border-radius:12px;background:var(--red);padding:17px 22px;font-weight:800;font-size:clamp(13px,2vw,18px);cursor:pointer;box-shadow:0 8px 22px #e5093522}
+.quicklinks a:nth-child(1),.quicklinks a:nth-child(3){background:#35b516}.quicklinks a:nth-child(2){background:#f00016}.quicklinks a:nth-child(4){background:#079bd1}.quicklinks a:nth-child(5){background:#e59a0b}
+.categories button.active{outline:3px solid #fff}
+.section-title{font-size:25px;margin:28px 0 18px;border-left:5px solid var(--red);padding-left:12px}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:24px 22px}
+.movie{min-width:0}.poster{width:100%;aspect-ratio:2/2.8;object-fit:cover;border:8px solid transparent;border-image:linear-gradient(135deg,#ce4a4a,#f8ca22) 1;background:linear-gradient(145deg,#172e4c,#78324b);display:flex;align-items:center;justify-content:center;text-align:center;padding:12px;color:white;font-size:25px;font-weight:900;text-shadow:0 2px 8px #000}
+.poster img{width:100%;height:100%;object-fit:cover}.movie h3{font-size:clamp(16px,2vw,23px);line-height:1.35;font-weight:600;margin:18px 0 10px}
+.movie .meta{font-size:13px;color:var(--muted);margin-bottom:12px}.movie-actions{display:flex;gap:8px;flex-wrap:wrap}.movie-actions button{background:#222831;border:1px solid #555;color:white;padding:9px 12px;border-radius:6px;cursor:pointer}
+.movie-actions .watch{background:#e50935;border-color:#e50935}
+.movie-actions .download{display:inline-block;text-decoration:none;text-align:center;background:#168b45;border:1px solid #168b45;color:#fff;padding:9px 12px;border-radius:6px;font-size:13px;font-weight:700}
+.pager{display:flex;justify-content:center;gap:12px;align-items:center;margin:40px 0}.pager button{background:#222;color:#fff;border:1px solid #444;padding:16px 22px;border-radius:8px}
+.empty{text-align:center;padding:40px;color:#aaa;display:none}
+footer{background:#15151d;text-align:center;padding:30px 18px;margin:0 22px 22px;line-height:2;color:#ddd}
+.modal{display:none;position:fixed;inset:0;background:#000d;z-index:20;align-items:center;justify-content:center;padding:15px}.modal.open{display:flex}.box{background:#1c222c;padding:22px;border-radius:12px;width:min(95%,520px);max-height:90vh;overflow:auto}.box input,.box textarea,.box select{display:block;width:100%;padding:12px;margin:10px 0;background:#10141b;border:1px solid #555;border-radius:6px;color:#fff}.box button{padding:11px 16px;background:var(--red);border:0;color:#fff;border-radius:6px;margin:5px;cursor:pointer}.box .secondary{background:#343d4b}.close{float:right;background:none!important;font-size:24px;padding:0!important}
+#adminArea{display:none}.note{color:#bac3d0;font-size:13px;line-height:1.5}.status{color:#a9e6a9;min-height:20px}
+video{width:100%;max-height:65vh;background:#000}
+@media(max-width:850px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:600px){header{height:82px;padding:0 15px}.menu{width:48px;height:48px}.search-toggle{width:42px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 16px}main{padding:16px 15px 40px}.poster{border-width:7px}.movie h3{margin-top:14px}.quicklinks a,.categories button{padding:15px 14px}footer{margin:0 12px 12px}}
+
+.footer-links{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-bottom:18px}
+.footer-links a{color:#f1f1f1;text-decoration:none;font-weight:600}
+.footer-links a:hover{color:#19e51e}
+</style>
+</head>
+<body>
+<header><button class="menu" onclick="toggleDrawer()">☰</button><div class="brand">TubeMovies</div><div class="header-tools">
+<button class="search-toggle" aria-label="Search" onclick="document.getElementById('searchbar').classList.toggle('open')">⌕</button>
+<button class="dots-toggle" aria-label="More options" onclick="toggleMoreMenu()">⋮</button>
+<div class="more-menu" id="moreMenu"><button onclick="openAdmin();toggleMoreMenu()">Admin Login / Upload</button></div>
+</div></header>
+<div class="drawer" id="drawer"><button onclick="toggleDrawer()">×</button><a href="#" onclick="toggleDrawer()">Home</a><a href="#catalog" onclick="toggleDrawer()">Movies</a><a href="#catalog" onclick="setCategory('Web Series');toggleDrawer()">Web Series</a><a href="#about" onclick="toggleDrawer()">About Us</a></div>
+<div class="searchbar" id="searchbar"><input id="searchInput" placeholder="Search movies, series, Hindi..." oninput="render()"></div>
+<main>
+<div class="searchhero"><input id="searchInput2" placeholder="Search movies,series,hindi" oninput="document.getElementById('searchInput').value=this.value;render()"></div>
+<div class="quicklinks"><a href="#catalog">ANIME</a><a href="#catalog">DESI VIDEOS</a><a href="#catalog">MOVIES</a><a href="#about">JOIN TELEGRAM</a></div>
+<div class="categories" id="categories">
+<button class="active" onclick="setCategory('All')">ALL</button><button onclick="setCategory('18+')">18+</button><button onclick="setCategory('Bollywood')">BOLLYWOOD</button><button onclick="setCategory('Dual Audio')">DUAL AUDIO</button><button onclick="setCategory('Hindi')">HINDI</button><button onclick="setCategory('Hollywood')">HOLLYWOOD</button><button onclick="setCategory('South Indian')">SOUTH INDIAN</button><button onclick="setCategory('Tamil')">TAMIL</button><button onclick="setCategory('Telugu')">TELUGU</button><button onclick="setCategory('Web Series')">WEB SERIES</button>
+</div>
+<h2 class="section-title" id="catalog">Latest Movies & Web Series</h2>
+<div class="grid" id="movieGrid"></div><div class="empty" id="empty">No movies found. Try another search.</div>
+<div class="pager"><button onclick="window.scrollTo({top:0,behavior:'smooth'})">BACK TO TOP ↑</button></div>
+</main>
+<footer id="about">
+  <div class="footer-links">
+    <a href="index.html">Home</a>
+    <a href="contact.html">Contact Us</a>
+    <a href="about.html">About Us</a>
+    <a href="disclaimer.html">Disclaimer</a>
+  </div>
+  <div>© 2026 TubeMovies · Movie catalogue and video platform</div>
+</footer>
+<div class="modal" id="adminModal"><div class="box"><button class="close" onclick="closeModal('adminModal')">×</button><h2>Admin Login / Upload</h2><p class="note">Sign in with the admin account configured in your Supabase project. Only authorized admins can publish videos.</p><input id="email" type="email" placeholder="Admin email"><input id="password" type="password" placeholder="Password"><button onclick="loginAdmin()">Login</button><button class="secondary" onclick="logoutAdmin()">Logout</button><div id="adminArea"><hr><h3>Upload a movie / episode</h3><input id="movieTitle" placeholder="Movie / Series title"><select id="movieCategory"><option>Hindi</option><option>Bollywood</option><option>Hollywood</option><option>Dual Audio</option><option>South Indian</option><option>Tamil</option><option>Telugu</option><option>Web Series</option></select><input id="movieYear" type="number" placeholder="Year (e.g. 2026)"><input id="posterFile" type="file" accept="image/*"><input id="videoFile" type="file" accept="video/mp4,video/webm,video/ogg"><p class="note">Large video files may take time and require sufficient storage/bandwidth. Use only content you have rights to publish.</p><button onclick="uploadMovie()">Upload & Publish</button></div><div class="status" id="status"></div><p class="note">First configure Supabase using the included setup.sql and README file.</p></div></div>
+<div class="modal" id="watchModal"><div class="box"><button class="close" onclick="closeModal('watchModal')">×</button><h2 id="watchTitle">Watch</h2><video id="player" controls playsinline></video></div></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// Add your Supabase project URL and anon key here after completing README setup.
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+let supabaseClient=null, allMovies=[], activeCategory='All', isAdmin=false;
+if(SUPABASE_URL.startsWith('https://') && SUPABASE_ANON_KEY.startsWith('ey')) supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+function toggleDrawer(){document.getElementById('drawer').classList.toggle('open')}
+function toggleMoreMenu(){document.getElementById('moreMenu').classList.toggle('open')}
+function openAdmin(){document.getElementById('adminModal').classList.add('open')}
+function closeModal(id){document.getElementById(id).classList.remove('open');if(id==='watchModal'){let v=document.getElementById('player');v.pause();v.removeAttribute('src');v.load()}}
+function setCategory(c){activeCategory=c;document.querySelectorAll('.categories button').forEach(b=>b.classList.toggle('active',b.textContent.trim().toLowerCase()===(c==='All'?'all':c.toLowerCase())));render()}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function loadMovies(){if(!supabaseClient){render();return}let {data,error}=await supabaseClient.from('movies').select('*').order('created_at',{ascending:false});if(error){console.error(error);return}allMovies=data||[];render()}
+function render(){let q=(document.getElementById('searchInput')?.value||document.getElementById('searchInput2')?.value||'').toLowerCase();let list=allMovies.filter(m=>(activeCategory==='All'||m.category===activeCategory)&&m.title.toLowerCase().includes(q));let grid=document.getElementById('movieGrid');grid.innerHTML=list.map(m=>`<article class="movie"><div class="poster">${m.poster_url?`<img src="${esc(m.poster_url)}" alt="${esc(m.title)} poster">`:`<span>${esc(m.title)}</span>`}</div><h3>${esc(m.title)}${m.year?' ('+esc(m.year)+')':''} ${esc(m.category||'')} Full Video</h3><div class="meta">Available to stream · ${esc(m.category||'Movie')}</div><div class="movie-actions"><button class="watch" onclick="watchMovie('${esc(m.id)}')">WATCH</button><a class="download" href="${esc(m.video_url)}" download="${esc(m.title)}.mp4" target="_blank" rel="noopener">DOWNLOAD</a></div></article>`).join('');document.getElementById('empty').style.display=list.length?'none':'block'}
+async function loginAdmin(){if(!supabaseClient){statusMsg('Add Supabase URL and anon key in this file first.');return}let {data,error}=await supabaseClient.auth.signInWithPassword({email:email.value,password:password.value});if(error){statusMsg(error.message);return}let {data:admin}=await supabaseClient.from('admins').select('user_id').eq('user_id',data.user.id).maybeSingle();if(!admin){await supabaseClient.auth.signOut();statusMsg('This account is not an authorized admin.');return}isAdmin=true;document.getElementById('adminArea').style.display='block';statusMsg('Admin signed in.')}
+async function logoutAdmin(){if(supabaseClient)await supabaseClient.auth.signOut();isAdmin=false;document.getElementById('adminArea').style.display='none';statusMsg('Signed out.')}
+function statusMsg(t){document.getElementById('status').textContent=t}
+async function uploadMovie(){if(!supabaseClient||!isAdmin){statusMsg('Please sign in as admin first.');return}let title=document.getElementById('movieTitle').value.trim(),category=document.getElementById('movieCategory').value,year=Number(document.getElementById('movieYear').value)||null,poster=document.getElementById('posterFile').files[0],video=document.getElementById('videoFile').files[0];if(!title||!video){statusMsg('Enter a title and choose a video file.');return}if(!['video/mp4','video/webm','video/ogg'].includes(video.type)){statusMsg('Please choose an MP4, WebM, or OGG video.');return}statusMsg('Uploading video… please keep this page open.');let uid=crypto.randomUUID(),vpath=uid+'/'+Date.now()+'_'+video.name.replace(/[^a-zA-Z0-9._-]/g,'_');let up=await supabaseClient.storage.from('movie-videos').upload(vpath,video,{contentType:video.type,upsert:false});if(up.error){statusMsg('Video upload failed: '+up.error.message);return}let videoUrl=supabaseClient.storage.from('movie-videos').getPublicUrl(vpath).data.publicUrl,posterUrl=null;if(poster){let ppath=uid+'/'+Date.now()+'_'+poster.name.replace(/[^a-zA-Z0-9._-]/g,'_');let pu=await supabaseClient.storage.from('movie-posters').upload(ppath,poster,{contentType:poster.type});if(pu.error){statusMsg('Poster upload failed: '+pu.error.message);return}posterUrl=supabaseClient.storage.from('movie-posters').getPublicUrl(ppath).data.publicUrl}let ins=await supabaseClient.from('movies').insert({title,category,year,video_url:videoUrl,poster_url:posterUrl,storage_path:vpath}).select().single();if(ins.error){statusMsg('Database save failed: '+ins.error.message);return}document.getElementById('movieTitle').value='';document.getElementById('videoFile').value='';document.getElementById('posterFile').value='';statusMsg('Published! Visitors can now see this title.');await loadMovies()}
+function watchMovie(id){let m=allMovies.find(x=>x.id===id);if(!m)return;document.getElementById('watchTitle').textContent=m.title;let v=document.getElementById('player');v.src=m.video_url;document.getElementById('watchModal').classList.add('open');v.play().catch(()=>{})}
+loadMovies();
+</script>
+</body></html>
