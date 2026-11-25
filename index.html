@@ -72,7 +72,7 @@ video{width:100%;max-height:65vh;background:#000}
   </div>
   <div>© 2026 TubeMovies · Movie catalogue and video platform</div>
 </footer>
-<div class="modal" id="adminModal"><div class="box"><button class="close" onclick="closeModal('adminModal')">×</button><h2>Admin Login / Upload</h2><p class="note">Sign in with your TubeMovies Appwrite Admin account. Only the configured admin can publish videos.</p><input id="email" type="email" placeholder="Admin email"><input id="password" type="password" placeholder="Password"><button onclick="loginAdmin()">Login</button><button class="secondary" onclick="logoutAdmin()">Logout</button><div id="adminArea"><hr><h3>Upload a Movie or Series Episode</h3><select id="contentType" onchange="toggleEpisodeFields()"><option value="movie">Movie</option><option value="episode">Web Series Episode</option></select><input id="movieTitle" placeholder="Movie title / Series name"><div id="episodeFields" style="display:none"><input id="episodeTitle" placeholder="Episode title"><input id="seasonNumber" type="number" min="1" placeholder="Season number (e.g. 1)"><input id="episodeNumber" type="number" min="1" placeholder="Episode number (e.g. 1)"></div><select id="movieCategory"><option>Hindi</option><option>Bollywood</option><option>Hollywood</option><option>Dual Audio</option><option>South Indian</option><option>Tamil</option><option>Telugu</option><option>Web Series</option></select><input id="movieYear" type="number" placeholder="Year (e.g. 2026)"><input id="movieLanguage" placeholder="Language (e.g. Hindi)"><input id="movieQuality" placeholder="Quality (e.g. 720p)"><textarea id="movieDescription" rows="3" placeholder="Description (optional)"></textarea><input id="posterFile" type="file" accept="image/*"><input id="videoFile" type="file" accept="*/*"><p class="note">Choose video from your phone Files app: Internal storage, Movies, Download or SD card. If a photo picker opens, use its menu and choose Browse / Files.</p><p class="note">Large video files may take time and require sufficient storage/bandwidth. Use only content you have rights to publish.</p><button onclick="uploadMovie()">Upload & Publish</button></div><div class="status" id="status"></div><p class="note">Video uploads use Cloudflare R2 multipart transfer (up to 100 GB per video). Posters still use Appwrite Storage and must fit its file-size limit. Upload only content you own or are authorised to distribute.</p></div></div>
+<div class="modal" id="adminModal"><div class="box"><button class="close" onclick="closeModal('adminModal')">×</button><h2>Admin Login / Upload</h2><p class="note">Sign in with your TubeMovies Appwrite Admin account. Only the configured admin can publish videos.</p><input id="email" type="email" placeholder="Admin email"><input id="password" type="password" placeholder="Password"><button onclick="loginAdmin()">Login</button><button class="secondary" onclick="logoutAdmin()">Logout</button><div id="adminArea"><hr><h3>Upload a Movie or Series Episode</h3><select id="contentType" onchange="toggleEpisodeFields()"><option value="movie">Movie</option><option value="episode">Web Series Episode</option></select><input id="movieTitle" placeholder="Movie title / Series name"><div id="episodeFields" style="display:none"><input id="episodeTitle" placeholder="Episode title"><input id="seasonNumber" type="number" min="1" placeholder="Season number (e.g. 1)"><input id="episodeNumber" type="number" min="1" placeholder="Episode number (e.g. 1)"></div><select id="movieCategory"><option>Hindi</option><option>Bollywood</option><option>Hollywood</option><option>Dual Audio</option><option>South Indian</option><option>Tamil</option><option>Telugu</option><option>Web Series</option></select><input id="movieYear" type="number" placeholder="Year (e.g. 2026)"><input id="movieLanguage" placeholder="Language (e.g. Hindi)"><input id="movieQuality" placeholder="Quality (e.g. 720p)"><textarea id="movieDescription" rows="3" placeholder="Description (optional)"></textarea><input id="posterFile" type="file" accept="image/*"><input id="videoFile" type="file" accept="*/*"><p class="note">Choose video from your phone Files app: Internal storage, Movies, Download or SD card. If a photo picker opens, use its menu and choose Browse / Files.</p><p class="note">Large video files may take time and require sufficient storage/bandwidth. Use only content you have rights to publish.</p><button id="uploadStart" onclick="uploadMovie()">Upload & Publish</button><button class="secondary" id="pauseUpload" onclick="pauseUploadNow()" disabled>Pause</button><button class="secondary" id="resumeUpload" onclick="resumeUploadNow()" disabled>Resume saved upload</button><button class="secondary" id="cancelUpload" onclick="cancelUploadNow()" disabled>Cancel upload</button></div><div class="status" id="status"></div><p class="note">Video uploads use Cloudflare R2 multipart transfer (up to 100 GB per video). Posters still use Appwrite Storage and must fit its file-size limit. Upload only content you own or are authorised to distribute.</p></div></div>
 <div class="modal" id="watchModal"><div class="box"><button class="close" onclick="closeModal('watchModal')">×</button><h2 id="watchTitle">Watch</h2><video id="player" controls playsinline></video></div></div>
 <script src="https://cdn.jsdelivr.net/npm/appwrite@29.0.0"></script>
 <script>
@@ -127,43 +127,64 @@ async function loginAdmin(){
 }
 async function logoutAdmin(){try{await account.deleteSession({sessionId:'current'})}catch(e){}isAdmin=false;currentUser=null;document.getElementById('adminArea').style.display='none';document.getElementById('password').value='';statusMsg('Signed out.')}
 function statusMsg(t){document.getElementById('status').textContent=t}
-async function uploadVideoToR2(file){
-  const jwtResult = await account.createJWT();
-  const authHeaders = { 'X-Appwrite-JWT': jwtResult.jwt };
-  const initResponse = await fetch(`${R2_WORKER_URL}/?action=init`, {
-    method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ filename: file.name, contentType: file.type || 'video/mp4', size: file.size })
-  });
-  const initData = await initResponse.json();
-  if (!initResponse.ok) throw new Error(initData.error || 'Could not start R2 upload');
-  const { key, uploadId } = initData;
-  const parts = [];
-  try {
-    const totalParts = Math.ceil(file.size / R2_PART_BYTES);
-    for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
-      const start = (partNumber - 1) * R2_PART_BYTES;
-      const end = Math.min(start + R2_PART_BYTES, file.size);
-      const chunk = file.slice(start, end);
-      statusMsg(`Uploading video: part ${partNumber}/${totalParts} (${Math.round(end / file.size * 100)}%)`);
-      const partResponse = await fetch(`${R2_WORKER_URL}/?action=part&key=${encodeURIComponent(key)}&uploadId=${encodeURIComponent(uploadId)}&partNumber=${partNumber}`, {
-        method: 'POST', headers: authHeaders, body: chunk
-      });
-      const partData = await partResponse.json();
-      if (!partResponse.ok) throw new Error(partData.error || `Upload failed at part ${partNumber}`);
-      parts.push({ partNumber, etag: partData.etag });
-    }
-    statusMsg('Finishing video upload…');
-    const completeResponse = await fetch(`${R2_WORKER_URL}/?action=complete`, {
-      method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, uploadId, parts })
-    });
-    const completeData = await completeResponse.json();
-    if (!completeResponse.ok) throw new Error(completeData.error || 'Could not finish R2 upload');
-    return `${R2_PUBLIC_BASE_URL}/${key}`;
-  } catch (error) {
-    // Keep incomplete multipart uploads for diagnosis/retry; they can be aborted from the R2 API if needed.
-    throw error;
+const UPLOAD_STATE_KEY = 'tubemovies_r2_multipart_v1';
+let uploadPaused = false, uploadCancelled = false, activePartController = null, uploadRunning = false;
+function getSavedUpload(){try{return JSON.parse(localStorage.getItem(UPLOAD_STATE_KEY)||'null')}catch(e){return null}}
+function saveUploadState(state){localStorage.setItem(UPLOAD_STATE_KEY,JSON.stringify(state));}
+function setUploadControls(running, saved){
+  document.getElementById('uploadStart').disabled=running;
+  document.getElementById('pauseUpload').disabled=!running;
+  document.getElementById('resumeUpload').disabled=running||!saved;
+  document.getElementById('cancelUpload').disabled=!saved;
+}
+function pauseUploadNow(){uploadPaused=true;if(activePartController)activePartController.abort();statusMsg('Pausing after the current part…');}
+async function waitWhilePaused(){while(uploadPaused&&!uploadCancelled)await new Promise(r=>setTimeout(r,250));if(uploadCancelled)throw new Error('Upload cancelled');}
+async function cancelUploadNow(){
+  const st=getSavedUpload(); uploadCancelled=true; uploadPaused=false;
+  if(activePartController)activePartController.abort();
+  if(st){try{const jwt=(await account.createJWT()).jwt;await fetch(`${R2_WORKER_URL}/?action=abort`,{method:'POST',headers:{'Content-Type':'application/json','X-Appwrite-JWT':jwt},body:JSON.stringify({key:st.key,uploadId:st.uploadId})})}catch(e){} }
+  localStorage.removeItem(UPLOAD_STATE_KEY);setUploadControls(false,false);statusMsg('Upload cancelled.');
+}
+async function uploadVideoToR2(file, resumeState=null){
+  const jwt=(await account.createJWT()).jwt, authHeaders={'X-Appwrite-JWT':jwt};
+  let state=resumeState;
+  if(!state){
+    const init=await fetch(`${R2_WORKER_URL}/?action=init`,{method:'POST',headers:{...authHeaders,'Content-Type':'application/json'},body:JSON.stringify({filename:file.name,contentType:file.type||'application/octet-stream',size:file.size})});
+    const data=await init.json();if(!init.ok)throw new Error(data.error||'Could not start R2 upload');
+    state={key:data.key,uploadId:data.uploadId,parts:[],fileName:file.name,fileSize:file.size,lastModified:file.lastModified,partBytes:R2_PART_BYTES};saveUploadState(state);
   }
+  if(state.fileName!==file.name||state.fileSize!==file.size||state.lastModified!==file.lastModified)throw new Error('Please select the exact same file used for the saved upload.');
+  uploadCancelled=false;uploadRunning=true;setUploadControls(true,true);
+  const total=Math.ceil(file.size/R2_PART_BYTES), done=new Set(state.parts.map(p=>p.partNumber));
+  try{
+    for(let n=1;n<=total;n++){
+      await waitWhilePaused();if(done.has(n))continue;
+      const begin=(n-1)*R2_PART_BYTES,end=Math.min(begin+R2_PART_BYTES,file.size),blob=file.slice(begin,end);
+      statusMsg(`Uploading part ${n}/${total} · ${Math.round((state.parts.length/total)*100)}% complete`);
+      let response,data;
+      while(true){
+        await waitWhilePaused();activePartController=new AbortController();
+        try{response=await fetch(`${R2_WORKER_URL}/?action=part&key=${encodeURIComponent(state.key)}&uploadId=${encodeURIComponent(state.uploadId)}&partNumber=${n}`,{method:'POST',headers:authHeaders,body:blob,signal:activePartController.signal});data=await response.json();activePartController=null;if(!response.ok)throw new Error(data.error||`Part ${n} failed`);break;}
+        catch(e){activePartController=null;if(uploadCancelled)throw new Error('Upload cancelled');if(uploadPaused){statusMsg('Paused. Press Resume saved upload to continue.');await waitWhilePaused();continue;}throw e;}
+      }
+      state.parts=state.parts.filter(p=>p.partNumber!==n);state.parts.push({partNumber:n,etag:data.etag});state.parts.sort((a,b)=>a.partNumber-b.partNumber);saveUploadState(state);
+      statusMsg(`Uploaded ${state.parts.length}/${total} parts · ${Math.round(state.parts.length/total*100)}%`);
+    }
+    await waitWhilePaused();statusMsg('Finishing upload…');
+    const finish=await fetch(`${R2_WORKER_URL}/?action=complete`,{method:'POST',headers:{...authHeaders,'Content-Type':'application/json'},body:JSON.stringify({key:state.key,uploadId:state.uploadId,parts:state.parts})});
+    const result=await finish.json();if(!finish.ok)throw new Error(result.error||'Could not complete upload');
+    localStorage.removeItem(UPLOAD_STATE_KEY);setUploadControls(false,false);return `${R2_PUBLIC_BASE_URL}/${state.key}`;
+  }catch(e){setUploadControls(false,!!getSavedUpload());throw e;}
+  finally{uploadRunning=false;activePartController=null;}
+}
+async function resumeUploadNow(){
+  const file=document.getElementById('videoFile').files[0],state=getSavedUpload();
+  if(!state){statusMsg('No saved upload found.');return;}
+  if(!file){statusMsg('Select the same video file again, then press Resume.');return;}
+  if(!isAdmin||!currentUser||currentUser.$id!==ADMIN_USER_ID){statusMsg('Please log in as Admin first.');return;}
+  uploadPaused=false;uploadCancelled=false;
+  try{const url=await uploadVideoToR2(file,state);statusMsg('Video upload completed: '+url+' . Re-enter details and publish if the page was refreshed.');}
+  catch(e){statusMsg(e.message||'Resume failed.');}
 }
 async function uploadMovie(){
   if(!isAdmin||!currentUser||currentUser.$id!==ADMIN_USER_ID){statusMsg('Please sign in with the authorised admin account first.');return}
@@ -182,7 +203,7 @@ async function uploadMovie(){
   let posterId=null,videoUrl=null;
   try{
     statusMsg('Starting secure Cloudflare R2 upload…');
-    videoUrl=await uploadVideoToR2(video);
+    videoUrl=await uploadVideoToR2(video,getSavedUpload());
     if(poster){statusMsg('Uploading poster to Appwrite…');const uploadedPoster=await storage.createFile({bucketId:BUCKET_ID,fileId:ID.unique(),file:poster});posterId=uploadedPoster.$id}
     statusMsg('Saving movie details…');
     await tablesDB.createRow({databaseId:DATABASE_ID,tableId:TABLE_ID,rowId:ID.unique(),data:{title,year,language,poster:posterId||'',video_url:videoUrl,download_url:videoUrl,description,category,quality,content_type:contentType,series_title:contentType==='episode'?title:'',season:contentType==='episode'?season:null,episode_number:contentType==='episode'?episodeNumber:null,episode_title:contentType==='episode'?episodeTitle:''}});
@@ -191,6 +212,7 @@ async function uploadMovie(){
   }catch(error){console.error(error);statusMsg('Upload/save failed: '+(error.message||'Check Worker, Appwrite permissions and R2 settings.'))}
 }
 function watchMovie(id){const m=allMovies.find(x=>x.$id===id);if(!m)return;document.getElementById('watchTitle').textContent=m.title;const v=document.getElementById('player');v.src=fileView(m.video_url);document.getElementById('watchModal').classList.add('open');v.play().catch(()=>{})}
+const initialSavedUpload=getSavedUpload();setUploadControls(false,!!initialSavedUpload);if(initialSavedUpload)statusMsg('A saved upload is available. Select the same file and press Resume saved upload.');
 loadMovies();
 </script>
 
