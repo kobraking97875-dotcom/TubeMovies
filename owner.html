@@ -128,7 +128,7 @@ function fileDownload(fileId){if(!fileId)return '#';if(/^https?:\/\//i.test(file
 async function loadMovies(){
   try{
     const result=await tablesDB.listRows({databaseId:DATABASE_ID,tableId:TABLE_ID,queries:[Query.orderDesc('$createdAt'),Query.limit(100)]});
-    allMovies=result.rows||[]; populateYearFilter(); render(); updateOwnerStats(); updateOwnerStats();
+    allMovies=result.rows||[]; populateYearFilter(); render(); updateOwnerStats();
   }catch(error){console.error(error);statusMsg('Could not load movies: '+(error.message||'Check Appwrite table permissions and column setup.'));render()}
 }
 
