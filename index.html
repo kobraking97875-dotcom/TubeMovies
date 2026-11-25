@@ -135,7 +135,8 @@ function statusMsg(t){document.getElementById('status').textContent=t}
 function updateUploadProgress(doneBytes,currentBytes,totalBytes,label){const total=Math.max(1,totalBytes),done=Math.min(total,doneBytes+currentBytes),pct=Math.min(100,done/total*100);const wrap=document.getElementById('uploadProgress');wrap.style.display='block';document.getElementById('progressFill').style.width=pct.toFixed(2)+'%';document.getElementById('progressPercent').textContent=Math.floor(pct)+'%';document.getElementById('progressText').textContent=`${label||'Uploading'} · ${(done/1024/1024/1024).toFixed(2)} GB / ${(total/1024/1024/1024).toFixed(2)} GB`; }
 function uploadPartXHR(url,headers,blob,signal,onProgress){return new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();xhr.open('POST',url);Object.entries(headers).forEach(([k,v])=>xhr.setRequestHeader(k,v));xhr.upload.onprogress=e=>{if(e.lengthComputable)onProgress(e.loaded)};xhr.onload=()=>{let data={};try{data=JSON.parse(xhr.responseText||'{}')}catch(e){};if(xhr.status>=200&&xhr.status<300)resolve(data);else reject(new Error(data.error||`Part upload failed (${xhr.status})`))};xhr.onerror=()=>reject(new Error('Network error while uploading part'));xhr.onabort=()=>reject(new DOMException('Upload paused','AbortError'));if(signal){if(signal.aborted){xhr.abort();return}signal.addEventListener('abort',()=>xhr.abort(),{once:true})}xhr.send(blob);});}
 const UPLOAD_STATE_KEY = 'tubemovies_r2_multipart_v1';
-let uploadPaused = false, uploadCancelled = false, activePartController = null, uploadRunning = false;
+const UPLOAD_PARALLEL_PARTS = 3; // Three simultaneous R2 multipart requests
+let uploadPaused = false, uploadCancelled = false, activePartControllers = new Set(), uploadRunning = false;
 function getSavedUpload(){try{return JSON.parse(localStorage.getItem(UPLOAD_STATE_KEY)||'null')}catch(e){return null}}
 function saveUploadState(state){localStorage.setItem(UPLOAD_STATE_KEY,JSON.stringify(state));}
 function setUploadControls(running, saved){
@@ -144,11 +145,11 @@ function setUploadControls(running, saved){
   document.getElementById('resumeUpload').disabled=running||!saved;
   document.getElementById('cancelUpload').disabled=!saved;
 }
-function pauseUploadNow(){uploadPaused=true;if(activePartController)activePartController.abort();statusMsg('Pausing after the current part…');}
+function pauseUploadNow(){uploadPaused=true;for(const c of activePartControllers)c.abort();statusMsg('Pausing active parts…');}
 async function waitWhilePaused(){while(uploadPaused&&!uploadCancelled)await new Promise(r=>setTimeout(r,250));if(uploadCancelled)throw new Error('Upload cancelled');}
 async function cancelUploadNow(){
   const st=getSavedUpload(); uploadCancelled=true; uploadPaused=false;
-  if(activePartController)activePartController.abort();
+  for(const c of activePartControllers)c.abort();
   if(st){try{const jwt=(await account.createJWT()).jwt;await fetch(`${R2_WORKER_URL}/?action=abort`,{method:'POST',headers:{'Content-Type':'application/json','X-Appwrite-JWT':jwt},body:JSON.stringify({key:st.key,uploadId:st.uploadId})})}catch(e){} }
   localStorage.removeItem(UPLOAD_STATE_KEY);setUploadControls(false,false);statusMsg('Upload cancelled.');
 }
@@ -161,28 +162,44 @@ async function uploadVideoToR2(file, resumeState=null){
     state={key:data.key,uploadId:data.uploadId,parts:[],fileName:file.name,fileSize:file.size,lastModified:file.lastModified,partBytes:R2_PART_BYTES};saveUploadState(state);
   }
   if(state.fileName!==file.name||state.fileSize!==file.size||state.lastModified!==file.lastModified)throw new Error('Please select the exact same file used for the saved upload.');
-  uploadCancelled=false;uploadRunning=true;setUploadControls(true,true);
+  uploadCancelled=false;uploadRunning=true;activePartControllers=new Set();setUploadControls(true,true);
   const total=Math.ceil(file.size/R2_PART_BYTES), done=new Set(state.parts.map(p=>p.partNumber));
-  const completedBytes=()=>state.parts.reduce((sum,p)=>sum+Math.min(R2_PART_BYTES,Math.max(0,file.size-(p.partNumber-1)*R2_PART_BYTES)),0);
-  try{
-    for(let n=1;n<=total;n++){
-      await waitWhilePaused();if(done.has(n))continue;
-      const begin=(n-1)*R2_PART_BYTES,end=Math.min(begin+R2_PART_BYTES,file.size),blob=file.slice(begin,end);
-      statusMsg(`Uploading video · part ${n}/${total}`);let data;
-      while(true){
-        await waitWhilePaused();activePartController=new AbortController();
-        try{data=await uploadPartXHR(`${R2_WORKER_URL}/?action=part&key=${encodeURIComponent(state.key)}&uploadId=${encodeURIComponent(state.uploadId)}&partNumber=${n}`,authHeaders,blob,activePartController.signal,loaded=>updateUploadProgress(completedBytes(),loaded,file.size,`Part ${n}/${total}`));activePartController=null;break;}
-        catch(e){activePartController=null;if(uploadCancelled)throw new Error('Upload cancelled');if(uploadPaused){updateUploadProgress(completedBytes(),0,file.size,'Paused');statusMsg('Paused. Press Resume saved upload to continue.');await waitWhilePaused();continue;}throw e;}
+  const inflight=new Map();
+  const partSize=n=>Math.min(R2_PART_BYTES,Math.max(0,file.size-(n-1)*R2_PART_BYTES));
+  const completedBytes=()=>state.parts.reduce((sum,p)=>sum+partSize(p.partNumber),0);
+  const renderProgress=()=>{let active=0;for(const v of inflight.values())active+=v;updateUploadProgress(completedBytes(),active,file.size,`Uploading ${state.parts.length}/${total} parts · ${UPLOAD_PARALLEL_PARTS} connections`)};
+  let nextPart=1, failure=null;
+  const worker=async()=>{
+    while(true){
+      await waitWhilePaused();if(uploadCancelled)throw new Error('Upload cancelled');
+      while(nextPart<=total&&done.has(nextPart))nextPart++;
+      if(nextPart>total)return;
+      const n=nextPart++;const begin=(n-1)*R2_PART_BYTES,end=Math.min(begin+R2_PART_BYTES,file.size),blob=file.slice(begin,end);
+      let uploaded=false;
+      while(!uploaded){
+        await waitWhilePaused();if(uploadCancelled)throw new Error('Upload cancelled');
+        const controller=new AbortController();activePartControllers.add(controller);inflight.set(n,0);
+        try{
+          const data=await uploadPartXHR(`${R2_WORKER_URL}/?action=part&key=${encodeURIComponent(state.key)}&uploadId=${encodeURIComponent(state.uploadId)}&partNumber=${n}`,authHeaders,blob,controller.signal,loaded=>{inflight.set(n,loaded);renderProgress()});
+          state.parts=state.parts.filter(p=>p.partNumber!==n);state.parts.push({partNumber:n,etag:data.etag});state.parts.sort((a,b)=>a.partNumber-b.partNumber);saveUploadState(state);done.add(n);uploaded=true;
+        }catch(e){
+          if(uploadCancelled)throw new Error('Upload cancelled');
+          if(uploadPaused){await waitWhilePaused();continue;}
+          throw e;
+        }finally{activePartControllers.delete(controller);inflight.delete(n);renderProgress()}
       }
-      state.parts=state.parts.filter(p=>p.partNumber!==n);state.parts.push({partNumber:n,etag:data.etag});state.parts.sort((a,b)=>a.partNumber-b.partNumber);saveUploadState(state);done.add(n);
-      updateUploadProgress(completedBytes(),0,file.size,'Uploaded');statusMsg(`Uploaded ${state.parts.length}/${total} parts`);
+      statusMsg(`Uploaded ${state.parts.length}/${total} parts (${Math.floor(completedBytes()/file.size*100)}%)`);
     }
-    await waitWhilePaused();statusMsg('Finishing upload…');
+  };
+  try{
+    renderProgress();
+    await Promise.all(Array.from({length:Math.min(UPLOAD_PARALLEL_PARTS,total)},()=>worker()));
+    await waitWhilePaused();statusMsg('All parts uploaded. Finishing video…');
     const finish=await fetch(`${R2_WORKER_URL}/?action=complete`,{method:'POST',headers:{...authHeaders,'Content-Type':'application/json'},body:JSON.stringify({key:state.key,uploadId:state.uploadId,parts:state.parts})});
     const result=await finish.json();if(!finish.ok)throw new Error(result.error||'Could not complete upload');
-    localStorage.removeItem(UPLOAD_STATE_KEY);setUploadControls(false,false);return `${R2_PUBLIC_BASE_URL}/${state.key}`;
+    localStorage.removeItem(UPLOAD_STATE_KEY);setUploadControls(false,false);updateUploadProgress(file.size,0,file.size,'Upload complete');return `${R2_PUBLIC_BASE_URL}/${state.key}`;
   }catch(e){setUploadControls(false,!!getSavedUpload());throw e;}
-  finally{uploadRunning=false;activePartController=null;}
+  finally{uploadRunning=false;activePartControllers.clear();}
 }
 async function resumeUploadNow(){
   const file=document.getElementById('videoFile').files[0],state=getSavedUpload();
