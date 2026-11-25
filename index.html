@@ -43,6 +43,8 @@ video{width:100%;max-height:65vh;background:#000}
 .footer-links{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-bottom:18px}
 .footer-links a{color:#f1f1f1;text-decoration:none;font-weight:600}
 .footer-links a:hover{color:#16c7b7}
+/* Public page never exposes legacy owner login/upload modal. */
+#adminModal{display:none!important}
 </style>
 </head>
 <body>
@@ -63,8 +65,13 @@ video{width:100%;max-height:65vh;background:#000}
 <div class="categories" id="categories">
 <button class="active" onclick="setCategory('All')">ALL</button><button onclick="setCategory('18+')">18+</button><button onclick="setCategory('Bollywood')">BOLLYWOOD</button><button onclick="setCategory('Dual Audio')">DUAL AUDIO</button><button onclick="setCategory('Hindi')">HINDI</button><button onclick="setCategory('Hollywood')">HOLLYWOOD</button><button onclick="setCategory('South Indian')">SOUTH INDIAN</button><button onclick="setCategory('Tamil')">TAMIL</button><button onclick="setCategory('Telugu')">TELUGU</button><button onclick="setCategory('Web Series')">WEB SERIES</button>
 </div>
-<h2 class="section-title" id="catalog">Latest Movies & Episodes</h2>
-<div class="grid" id="movieGrid"></div><div class="empty" id="empty">No movies found. Try another search.</div>
+<section id="continueSection" style="display:none"><h2 class="section-title">Continue Watching</h2><div class="grid" id="continueGrid"></div></section>
+<section id="watchlistSection" style="display:none"><h2 class="section-title">My Watchlist</h2><div class="grid" id="watchlistGrid"></div></section>
+<section><h2 class="section-title">Trending Movies</h2><div class="grid" id="trendingGrid"></div></section>
+<section><h2 class="section-title">Recently Added</h2><div class="grid" id="recentGrid"></div></section>
+<section id="recommendedSection" style="display:none"><h2 class="section-title">Recommended For You</h2><div class="grid" id="recommendedGrid"></div></section>
+<section><h2 class="section-title" id="catalog">All Movies & Episodes</h2>
+<div class="grid" id="movieGrid"></div><div class="empty" id="empty">No movies found. Try another search.</div></section>
 <div class="pager"><button onclick="window.scrollTo({top:0,behavior:'smooth'})">BACK TO TOP ↑</button></div>
 </main>
 <footer id="about">
@@ -77,7 +84,7 @@ video{width:100%;max-height:65vh;background:#000}
   <div>© 2026 TubeMovies · Movie catalogue and video platform</div>
 </footer>
 <div class="modal" id="adminModal"><div class="box"><button class="close" onclick="closeModal('adminModal')">×</button><h2>Admin Login / Upload</h2><p class="note">Sign in with your TubeMovies Appwrite Admin account. Only the configured admin can publish videos.</p><input id="email" type="email" placeholder="Admin email"><input id="password" type="password" placeholder="Password"><button onclick="loginAdmin()">Login</button><button class="secondary" onclick="logoutAdmin()">Logout</button><div id="adminArea"><hr><h3>Upload a Movie or Series Episode</h3><select id="contentType" onchange="toggleEpisodeFields()"><option value="movie">Movie</option><option value="episode">Web Series Episode</option></select><input id="movieTitle" placeholder="Movie title / Series name"><div id="episodeFields" style="display:none"><input id="episodeTitle" placeholder="Episode title"><input id="seasonNumber" type="number" min="1" placeholder="Season number (e.g. 1)"><input id="episodeNumber" type="number" min="1" placeholder="Episode number (e.g. 1)"></div><select id="movieCategory"><option>Hindi</option><option>Bollywood</option><option>Hollywood</option><option>Dual Audio</option><option>South Indian</option><option>Tamil</option><option>Telugu</option><option>Web Series</option></select><input id="movieYear" type="number" placeholder="Year (e.g. 2026)"><input id="movieLanguage" placeholder="Language (e.g. Hindi)"><input id="movieQuality" placeholder="Quality (e.g. 720p)"><textarea id="movieDescription" rows="3" placeholder="Description (optional)"></textarea><input id="posterFile" type="file" accept="image/*"><input id="videoFile" type="file" accept="*/*"><p class="note">Choose video from your phone Files app: Internal storage, Movies, Download or SD card. If a photo picker opens, use its menu and choose Browse / Files.</p><p class="note">Large video files may take time and require sufficient storage/bandwidth. Use only content you have rights to publish.</p><div class="progress-wrap" id="uploadProgress"><div class="progress-label"><span id="progressText">Uploading…</span><strong id="progressPercent">0%</strong></div><div class="progress-track"><div class="progress-fill" id="progressFill"></div></div></div><button id="uploadStart" onclick="uploadMovie()">Upload & Publish</button><button class="secondary" id="pauseUpload" onclick="pauseUploadNow()" disabled>Pause</button><button class="secondary" id="resumeUpload" onclick="resumeUploadNow()" disabled>Resume saved upload</button><button class="secondary" id="cancelUpload" onclick="cancelUploadNow()" disabled>Cancel upload</button></div><div class="status" id="status"></div><p class="note">Video uploads use Cloudflare R2 multipart transfer (up to 100 GB per video). Posters still use Appwrite Storage and must fit its file-size limit. Upload only content you own or are authorised to distribute.</p></div></div>
-<div class="modal" id="watchModal"><div class="box"><button class="close" onclick="closeModal('watchModal')">×</button><h2 id="watchTitle">Watch</h2><video id="player" controls playsinline></video></div></div>
+<div class="modal" id="watchModal"><div class="box"><button class="close" onclick="closeModal('watchModal')">×</button><h2 id="watchTitle">Watch</h2><video id="player" controls playsinline></video><button type="button" onclick="togglePlayerFullscreen()">⛶ Fullscreen</button><p class="note">Video quality and subtitles depend on the uploaded video file. Separate quality tracks and subtitle files are not configured yet.</p></div></div>
 <script src="https://cdn.jsdelivr.net/npm/appwrite@29.0.0"></script>
 <script>
 // TubeMovies Appwrite configuration. These are public project identifiers, not secret keys.
@@ -96,12 +103,12 @@ const account = new Appwrite.Account(client);
 const tablesDB = new Appwrite.TablesDB(client);
 const storage = new Appwrite.Storage(client);
 const ID = Appwrite.ID, Query = Appwrite.Query;
-let allMovies=[], activeCategory='All', isAdmin=false, currentUser=null;
+let allMovies=[], activeCategory='All', isAdmin=false, currentUser=null, activeMovieId=null;
 function toggleEpisodeFields(){const ep=document.getElementById('contentType').value==='episode';document.getElementById('episodeFields').style.display=ep?'block':'none'}
 function toggleDrawer(){document.getElementById('drawer').classList.toggle('open')}
 function toggleMoreMenu(){document.getElementById('moreMenu').classList.toggle('open')}
 function openAdmin(){document.getElementById('adminModal').classList.add('open');restoreAdminSession()}
-function closeModal(id){document.getElementById(id).classList.remove('open');if(id==='watchModal'){let v=document.getElementById('player');v.pause();v.removeAttribute('src');v.load()}}
+function closeModal(id){document.getElementById(id).classList.remove('open');if(id==='watchModal'){let v=document.getElementById('player');v.pause();v.removeAttribute('src');v.load();activeMovieId=null}}
 function setCategory(c){activeCategory=c;document.querySelectorAll('.categories button').forEach(b=>b.classList.toggle('active',b.textContent.trim().toLowerCase()===(c==='All'?'all':c.toLowerCase())));render()}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function fileView(fileId){if(!fileId)return '';if(/^https?:\/\//i.test(fileId))return fileId;return storage.getFileView({bucketId:BUCKET_ID,fileId})}
@@ -115,18 +122,37 @@ async function loadMovies(){
 
 function populateYearFilter(){const el=document.getElementById('filterYear');if(!el)return;const selected=el.value;const years=[...new Set(allMovies.map(m=>String(m.year||'')).filter(Boolean))].sort((a,b)=>Number(b)-Number(a));el.innerHTML='<option value="">All years</option>'+years.map(y=>`<option value="${esc(y)}">${esc(y)}</option>`).join('');el.value=selected;}
 
+function readLocal(key,fallback={}){try{return JSON.parse(localStorage.getItem(key)||JSON.stringify(fallback))}catch(e){return fallback}}
+function writeLocal(key,value){localStorage.setItem(key,JSON.stringify(value))}
+function cardMarkup(m){
+ const posterUrl=fileView(m.poster),isEpisode=m.content_type==='episode';
+ const episodeLabel=isEpisode?` · S${String(m.season||1).padStart(2,'0')}E${String(m.episode_number||1).padStart(2,'0')}`:'';
+ const displayTitle=isEpisode?`${m.title||''}${episodeLabel} - ${m.episode_title||'Episode'}`:m.title;
+ const saved=readLocal('tm_watchlist',[]).includes(m.$id);
+ const rating=readLocal('tm_ratings',{})[m.$id]||0;
+ return `<article class="movie"><div class="poster">${posterUrl?`<img src="${esc(posterUrl)}" alt="${esc(displayTitle)} poster">`:`<span>${esc(displayTitle)}</span>`}</div><h3>${esc(displayTitle)}${m.year?' ('+esc(m.year)+')':''}</h3><div class="meta">${isEpisode?'WEB SERIES EPISODE':'MOVIE'} · ${esc(m.language||'')} ${m.quality?' · '+esc(m.quality):''} · ${esc(m.category||'')}</div><div class="movie-actions"><button class="watch" onclick="watchMovie('${esc(m.$id)}')">WATCH</button><a class="download" href="${esc(fileDownload(m.download_url||m.video_url))}" target="_blank" rel="noopener">DOWNLOAD</a><button onclick="toggleWatchlist('${esc(m.$id)}')">${saved?'★ Saved':'☆ Save'}</button></div><div class="meta">Your rating: <select aria-label="Rate title" onchange="rateTitle('${esc(m.$id)}',this.value)" style="background:#101116;color:white;padding:5px;border-radius:5px"><option value="0">Rate</option>${[1,2,3,4,5].map(n=>`<option value="${n}" ${rating===n?'selected':''}>${n} ★</option>`).join('')}</select></div></article>`;
+}
+function drawCards(id,items){const el=document.getElementById(id);if(el)el.innerHTML=items.map(cardMarkup).join('')}
+function toggleWatchlist(id){let a=readLocal('tm_watchlist',[]);a=a.includes(id)?a.filter(x=>x!==id):[...a,id];writeLocal('tm_watchlist',a);render()}
+function rateTitle(id,value){const r=readLocal('tm_ratings',{});r[id]=Number(value)||0;writeLocal('tm_ratings',r)}
 function render(){
-  const q=(document.getElementById('searchInput')?.value||'').trim().toLowerCase();
-  const lang=(document.getElementById('filterLanguage')?.value||'').toLowerCase();
-  const year=(document.getElementById('filterYear')?.value||'');
-  const type=(document.getElementById('filterType')?.value||'');
-  const list=allMovies.filter(m=>{
-    const hay=[m.title,m.series_title,m.episode_title,m.description,m.category,m.language,m.quality,m.year].join(' ').toLowerCase();
-    return (activeCategory==='All'||m.category===activeCategory) && (!q||hay.includes(q)) && (!lang||String(m.language||'').toLowerCase()===lang) && (!year||String(m.year||'')===year) && (!type||String(m.content_type||'movie')===type);
-  });
-  const grid=document.getElementById('movieGrid');
-  grid.innerHTML=list.map(m=>{const posterUrl=fileView(m.poster);const isEpisode=m.content_type==='episode';const episodeLabel=isEpisode?` · S${String(m.season||1).padStart(2,'0')}E${String(m.episode_number||1).padStart(2,'0')}`:'';const displayTitle=isEpisode?`${m.title||''}${episodeLabel} - ${m.episode_title||'Episode'}`:m.title;return `<article class="movie"><div class="poster">${posterUrl?`<img src="${esc(posterUrl)}" alt="${esc(displayTitle)} poster">`:`<span>${esc(displayTitle)}</span>`}</div><h3>${esc(displayTitle)}${m.year?' ('+esc(m.year)+')':''}</h3><div class="meta">${isEpisode?'WEB SERIES EPISODE':'MOVIE'} · ${esc(m.language||'')} ${m.quality?' · '+esc(m.quality):''} · ${esc(m.category||'')}</div><div class="movie-actions"><button class="watch" onclick="watchMovie('${esc(m.$id)}')">WATCH</button><a class="download" href="${esc(fileDownload(m.download_url||m.video_url))}" target="_blank" rel="noopener">DOWNLOAD</a></div></article>`}).join('');
-  document.getElementById('empty').style.display=list.length?'none':'block';
+ const q=(document.getElementById('searchInput')?.value||'').trim().toLowerCase();
+ const lang=(document.getElementById('filterLanguage')?.value||'').toLowerCase();
+ const year=(document.getElementById('filterYear')?.value||''),type=(document.getElementById('filterType')?.value||'');
+ const list=allMovies.filter(m=>{const hay=[m.title,m.series_title,m.episode_title,m.description,m.category,m.language,m.quality,m.year].join(' ').toLowerCase();return(activeCategory==='All'||m.category===activeCategory)&&(!q||hay.includes(q))&&(!lang||String(m.language||'').toLowerCase()===lang)&&(!year||String(m.year||'')===year)&&(!type||String(m.content_type||'movie')===type)});
+ drawCards('movieGrid',list);
+ const views=readLocal('tm_views',{});
+ const ranked=[...allMovies].sort((a,b)=>(views[b.$id]||0)-(views[a.$id]||0));
+ drawCards('trendingGrid',ranked.slice(0,8));
+ drawCards('recentGrid',[...allMovies].slice(0,8));
+ const saved=readLocal('tm_watchlist',[]),continueIds=Object.keys(readLocal('tm_progress',{}));
+ const continueItems=continueIds.map(id=>allMovies.find(m=>m.$id===id)).filter(Boolean);
+ const continueSection=document.getElementById('continueSection');continueSection.style.display=continueItems.length?'block':'none';drawCards('continueGrid',continueItems.slice(0,8));
+ const watchlistItems=saved.map(id=>allMovies.find(m=>m.$id===id)).filter(Boolean);
+ const watchlistSection=document.getElementById('watchlistSection');watchlistSection.style.display=watchlistItems.length?'block':'none';drawCards('watchlistGrid',watchlistItems);
+ const recommendations=allMovies.filter(m=>saved.some(id=>{const x=allMovies.find(z=>z.$id===id);return x&&x.category===m.category})&&!saved.includes(m.$id));
+ const recSection=document.getElementById('recommendedSection');recSection.style.display=recommendations.length?'block':'none';drawCards('recommendedGrid',recommendations.slice(0,8));
+ document.getElementById('empty').style.display=list.length?'none':'block';
 }
 async function restoreAdminSession(){
   try{const user=await account.get();if(user.$id===ADMIN_USER_ID){currentUser=user;isAdmin=true;document.getElementById('adminArea').style.display='block';document.getElementById('password').value='';statusMsg('Admin session restored. You are still signed in.');return true;}
@@ -248,7 +274,10 @@ async function uploadMovie(){
     document.getElementById('contentType').value='movie';toggleEpisodeFields();statusMsg('Published! Visitors can now watch and download this authorised title.');await loadMovies();
   }catch(error){console.error(error);statusMsg('Upload/save failed: '+(error.message||'Check Worker, Appwrite permissions and R2 settings.'))}
 }
-function watchMovie(id){const m=allMovies.find(x=>x.$id===id);if(!m)return;document.getElementById('watchTitle').textContent=m.title;const v=document.getElementById('player');v.src=fileView(m.video_url);document.getElementById('watchModal').classList.add('open');v.play().catch(()=>{})}
+async function togglePlayerFullscreen(){const v=document.getElementById('player');try{if(document.fullscreenElement){await document.exitFullscreen()}else if(v.requestFullscreen){await v.requestFullscreen()}else if(v.webkitEnterFullscreen){v.webkitEnterFullscreen()}else{statusMsg('Fullscreen is not supported in this browser.')}}catch(e){console.warn('Fullscreen request failed',e)}}
+function watchMovie(id){const m=allMovies.find(x=>x.$id===id);if(!m||!m.video_url)return;activeMovieId=id;document.getElementById('watchTitle').textContent=m.title||'Watch';const v=document.getElementById('player');v.src=fileView(m.video_url);v.onloadedmetadata=()=>{const p=readLocal('tm_progress',{});const saved=Number(p[id]||0);if(saved>0&&saved<v.duration-5)v.currentTime=saved};document.getElementById('watchModal').classList.add('open');const views=readLocal('tm_views',{});views[id]=(views[id]||0)+1;writeLocal('tm_views',views);v.play().catch(()=>{})}
+document.getElementById('player').addEventListener('timeupdate',function(){if(!activeMovieId||!Number.isFinite(this.currentTime))return;const p=readLocal('tm_progress',{});if(this.currentTime>5&&(!Number.isFinite(this.duration)||this.currentTime<this.duration-5))p[activeMovieId]=this.currentTime;else if(Number.isFinite(this.duration)&&this.currentTime>=this.duration-5)delete p[activeMovieId];writeLocal('tm_progress',p)});
+document.getElementById('player').addEventListener('ended',function(){if(!activeMovieId)return;const p=readLocal('tm_progress',{});delete p[activeMovieId];writeLocal('tm_progress',p);render()});
 const initialSavedUpload=getSavedUpload();setUploadControls(false,!!initialSavedUpload);if(initialSavedUpload)statusMsg('A saved upload is available. Select the same file and press Resume saved upload.');
 loadMovies();
 restoreAdminSession();
