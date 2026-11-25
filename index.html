@@ -66,6 +66,7 @@ video{width:100%;max-height:65vh;background:#000}
 <button class="active" onclick="setCategory('All')">ALL</button><button onclick="setCategory('18+')">18+</button><button onclick="setCategory('Bollywood')">BOLLYWOOD</button><button onclick="setCategory('Dual Audio')">DUAL AUDIO</button><button onclick="setCategory('Hindi')">HINDI</button><button onclick="setCategory('Hollywood')">HOLLYWOOD</button><button onclick="setCategory('South Indian')">SOUTH INDIAN</button><button onclick="setCategory('Tamil')">TAMIL</button><button onclick="setCategory('Telugu')">TELUGU</button><button onclick="setCategory('Web Series')">WEB SERIES</button>
 </div>
 <section id="continueSection" style="display:none"><h2 class="section-title">Continue Watching</h2><div class="grid" id="continueGrid"></div></section>
+<section id="watchlistSection" style="display:none"><h2 class="section-title">My Watchlist</h2><div class="grid" id="watchlistGrid"></div></section>
 <section><h2 class="section-title">Trending Movies</h2><div class="grid" id="trendingGrid"></div></section>
 <section><h2 class="section-title">Recently Added</h2><div class="grid" id="recentGrid"></div></section>
 <section id="recommendedSection" style="display:none"><h2 class="section-title">Recommended For You</h2><div class="grid" id="recommendedGrid"></div></section>
@@ -102,12 +103,12 @@ const account = new Appwrite.Account(client);
 const tablesDB = new Appwrite.TablesDB(client);
 const storage = new Appwrite.Storage(client);
 const ID = Appwrite.ID, Query = Appwrite.Query;
-let allMovies=[], activeCategory='All', isAdmin=false, currentUser=null;
+let allMovies=[], activeCategory='All', isAdmin=false, currentUser=null, activeMovieId=null;
 function toggleEpisodeFields(){const ep=document.getElementById('contentType').value==='episode';document.getElementById('episodeFields').style.display=ep?'block':'none'}
 function toggleDrawer(){document.getElementById('drawer').classList.toggle('open')}
 function toggleMoreMenu(){document.getElementById('moreMenu').classList.toggle('open')}
 function openAdmin(){document.getElementById('adminModal').classList.add('open');restoreAdminSession()}
-function closeModal(id){document.getElementById(id).classList.remove('open');if(id==='watchModal'){let v=document.getElementById('player');v.pause();v.removeAttribute('src');v.load()}}
+function closeModal(id){document.getElementById(id).classList.remove('open');if(id==='watchModal'){let v=document.getElementById('player');v.pause();v.removeAttribute('src');v.load();activeMovieId=null}}
 function setCategory(c){activeCategory=c;document.querySelectorAll('.categories button').forEach(b=>b.classList.toggle('active',b.textContent.trim().toLowerCase()===(c==='All'?'all':c.toLowerCase())));render()}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function fileView(fileId){if(!fileId)return '';if(/^https?:\/\//i.test(fileId))return fileId;return storage.getFileView({bucketId:BUCKET_ID,fileId})}
@@ -147,6 +148,8 @@ function render(){
  const saved=readLocal('tm_watchlist',[]),continueIds=Object.keys(readLocal('tm_progress',{}));
  const continueItems=continueIds.map(id=>allMovies.find(m=>m.$id===id)).filter(Boolean);
  const continueSection=document.getElementById('continueSection');continueSection.style.display=continueItems.length?'block':'none';drawCards('continueGrid',continueItems.slice(0,8));
+ const watchlistItems=saved.map(id=>allMovies.find(m=>m.$id===id)).filter(Boolean);
+ const watchlistSection=document.getElementById('watchlistSection');watchlistSection.style.display=watchlistItems.length?'block':'none';drawCards('watchlistGrid',watchlistItems);
  const recommendations=allMovies.filter(m=>saved.some(id=>{const x=allMovies.find(z=>z.$id===id);return x&&x.category===m.category})&&!saved.includes(m.$id));
  const recSection=document.getElementById('recommendedSection');recSection.style.display=recommendations.length?'block':'none';drawCards('recommendedGrid',recommendations.slice(0,8));
  document.getElementById('empty').style.display=list.length?'none':'block';
@@ -271,8 +274,9 @@ async function uploadMovie(){
     document.getElementById('contentType').value='movie';toggleEpisodeFields();statusMsg('Published! Visitors can now watch and download this authorised title.');await loadMovies();
   }catch(error){console.error(error);statusMsg('Upload/save failed: '+(error.message||'Check Worker, Appwrite permissions and R2 settings.'))}
 }
-function watchMovie(id){const m=allMovies.find(x=>x.$id===id);if(!m)return;document.getElementById('watchTitle').textContent=m.title;const v=document.getElementById('player');v.src=fileView(m.video_url);const progress=readLocal('tm_progress',{});if(progress[id])v.currentTime=progress[id];document.getElementById('watchModal').classList.add('open');const views=readLocal('tm_views',{});views[id]=(views[id]||0)+1;writeLocal('tm_views',views);v.play().catch(()=>{})}
-document.getElementById('player').addEventListener('timeupdate',function(){const m=allMovies.find(x=>fileView(x.video_url)===this.src);if(!m||!Number.isFinite(this.currentTime))return;const p=readLocal('tm_progress',{});p[m.$id]=this.currentTime;writeLocal('tm_progress',p)});
+function watchMovie(id){const m=allMovies.find(x=>x.$id===id);if(!m||!m.video_url)return;activeMovieId=id;document.getElementById('watchTitle').textContent=m.title||'Watch';const v=document.getElementById('player');v.src=fileView(m.video_url);v.onloadedmetadata=()=>{const p=readLocal('tm_progress',{});const saved=Number(p[id]||0);if(saved>0&&saved<v.duration-5)v.currentTime=saved};document.getElementById('watchModal').classList.add('open');const views=readLocal('tm_views',{});views[id]=(views[id]||0)+1;writeLocal('tm_views',views);v.play().catch(()=>{})}
+document.getElementById('player').addEventListener('timeupdate',function(){if(!activeMovieId||!Number.isFinite(this.currentTime))return;const p=readLocal('tm_progress',{});if(this.currentTime>5&&(!Number.isFinite(this.duration)||this.currentTime<this.duration-5))p[activeMovieId]=this.currentTime;else if(Number.isFinite(this.duration)&&this.currentTime>=this.duration-5)delete p[activeMovieId];writeLocal('tm_progress',p)});
+document.getElementById('player').addEventListener('ended',function(){if(!activeMovieId)return;const p=readLocal('tm_progress',{});delete p[activeMovieId];writeLocal('tm_progress',p);render()});
 const initialSavedUpload=getSavedUpload();setUploadControls(false,!!initialSavedUpload);if(initialSavedUpload)statusMsg('A saved upload is available. Select the same file and press Resume saved upload.');
 loadMovies();
 restoreAdminSession();
