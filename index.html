@@ -135,7 +135,7 @@ function statusMsg(t){document.getElementById('status').textContent=t}
 function updateUploadProgress(doneBytes,currentBytes,totalBytes,label){const total=Math.max(1,totalBytes),done=Math.min(total,doneBytes+currentBytes),pct=Math.min(100,done/total*100);const wrap=document.getElementById('uploadProgress');wrap.style.display='block';document.getElementById('progressFill').style.width=pct.toFixed(2)+'%';document.getElementById('progressPercent').textContent=Math.floor(pct)+'%';document.getElementById('progressText').textContent=`${label||'Uploading'} · ${(done/1024/1024/1024).toFixed(2)} GB / ${(total/1024/1024/1024).toFixed(2)} GB`; }
 function uploadPartXHR(url,headers,blob,signal,onProgress){return new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();xhr.open('POST',url);Object.entries(headers).forEach(([k,v])=>xhr.setRequestHeader(k,v));xhr.upload.onprogress=e=>{if(e.lengthComputable)onProgress(e.loaded)};xhr.onload=()=>{let data={};try{data=JSON.parse(xhr.responseText||'{}')}catch(e){};if(xhr.status>=200&&xhr.status<300)resolve(data);else reject(new Error(data.error||`Part upload failed (${xhr.status})`))};xhr.onerror=()=>reject(new Error('Network error while uploading part'));xhr.onabort=()=>reject(new DOMException('Upload paused','AbortError'));if(signal){if(signal.aborted){xhr.abort();return}signal.addEventListener('abort',()=>xhr.abort(),{once:true})}xhr.send(blob);});}
 const UPLOAD_STATE_KEY = 'tubemovies_r2_multipart_v1';
-const UPLOAD_PARALLEL_PARTS = 3; // Three simultaneous R2 multipart requests
+const UPLOAD_PARALLEL_PARTS = 5; // Five simultaneous parts; no fixed KB/s or MB/s bandwidth throttle
 let uploadPaused = false, uploadCancelled = false, activePartControllers = new Set(), uploadRunning = false;
 function getSavedUpload(){try{return JSON.parse(localStorage.getItem(UPLOAD_STATE_KEY)||'null')}catch(e){return null}}
 function saveUploadState(state){localStorage.setItem(UPLOAD_STATE_KEY,JSON.stringify(state));}
@@ -167,7 +167,7 @@ async function uploadVideoToR2(file, resumeState=null){
   const inflight=new Map();
   const partSize=n=>Math.min(R2_PART_BYTES,Math.max(0,file.size-(n-1)*R2_PART_BYTES));
   const completedBytes=()=>state.parts.reduce((sum,p)=>sum+partSize(p.partNumber),0);
-  const renderProgress=()=>{let active=0;for(const v of inflight.values())active+=v;updateUploadProgress(completedBytes(),active,file.size,`Uploading ${state.parts.length}/${total} parts · ${UPLOAD_PARALLEL_PARTS} connections`)};
+  const renderProgress=()=>{let active=0;for(const v of inflight.values())active+=v;updateUploadProgress(completedBytes(),active,file.size,`Uploading ${state.parts.length}/${total} parts · ${UPLOAD_PARALLEL_PARTS} parallel connections`)};
   let nextPart=1, failure=null;
   const worker=async()=>{
     while(true){
