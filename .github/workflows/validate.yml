@@ -1,0 +1,36 @@
+name: Validate TubeMovies
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [feature/owner-dashboard-public-cleanup]
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check Worker syntax
+        run: node --check worker.js
+      - name: Check inline JavaScript syntax
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const vm = require('vm');
+          for (const file of ['index.html', 'owner.html']) {
+            const html = fs.readFileSync(file, 'utf8');
+            const scripts = [...html.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)];
+            if (!scripts.length) throw new Error(`No inline scripts found in ${file}`);
+            scripts.forEach((match, index) => {
+              const code = match[1].trim();
+              if (code) new vm.Script(code, { filename: `${file}:script-${index + 1}` });
+            });
+            console.log(`JavaScript syntax OK: ${file} (${scripts.length} script block(s))`);
+          }
+          NODE
