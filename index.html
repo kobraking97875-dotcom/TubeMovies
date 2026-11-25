@@ -19,7 +19,7 @@ header{position:sticky;top:0;z-index:5;background:var(--head);height:92px;displa
 .drawer{display:none;position:fixed;inset:0 auto 0 0;width:min(78%,340px);z-index:10;background:#11151cF5;padding:24px;box-shadow:0 0 0 100vmax #0009}
 .drawer.open{display:block}.drawer button{float:right;background:none;color:white;border:0;font-size:30px}.drawer a{display:block;color:#fff;text-decoration:none;font-size:21px;margin:30px 0}.drawer a:hover{color:var(--green)}
 main{max-width:1200px;margin:auto;padding:20px 22px 50px}
-.searchhero{margin:8px 0 28px}.searchhero input{width:100%;padding:17px 20px;border:2px solid #aaa;border-radius:7px;background:#101116;color:#fff;font-size:19px}
+.searchhero{margin:8px 0 28px}.searchhero input,.search-filters select{padding:15px 16px;border:2px solid #59647a;border-radius:7px;background:#101116;color:#fff;font-size:17px}.searchhero>input{width:100%}.search-filters{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}.search-filters select{flex:1;min-width:130px}
 .quicklinks,.categories{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin:18px 0 26px}
 .quicklinks a,.categories button{color:white;text-decoration:none;border:0;border-radius:12px;background:linear-gradient(135deg,#7657ff,#4d8dff);padding:17px 22px;font-weight:800;font-size:clamp(13px,2vw,18px);cursor:pointer;box-shadow:0 8px 22px #7657ff33}
 .quicklinks a:nth-child(1),.quicklinks a:nth-child(3){background:#087f86}.quicklinks a:nth-child(2){background:#7657ff}.quicklinks a:nth-child(4){background:#2456a6}
@@ -47,14 +47,18 @@ video{width:100%;max-height:65vh;background:#000}
 </head>
 <body>
 <header><button class="menu" onclick="toggleDrawer()">☰</button><div class="brand">TubeMovies</div><div class="header-tools">
-<button class="search-toggle" aria-label="Search" onclick="document.getElementById('searchbar').classList.toggle('open')">⌕</button>
+
 <button class="dots-toggle" aria-label="More options" onclick="toggleMoreMenu()">⋮</button>
-<div class="more-menu" id="moreMenu"><button onclick="openAdmin();toggleMoreMenu()">Admin Login / Upload</button></div>
+<div class="more-menu" id="moreMenu"><button onclick="toggleMoreMenu();document.getElementById('drawer').classList.add('open')">Menu</button></div>
 </div></header>
 <div class="drawer" id="drawer"><button onclick="toggleDrawer()">×</button><a href="#" onclick="toggleDrawer()">Home</a><a href="#catalog" onclick="toggleDrawer()">Movies</a><a href="#catalog" onclick="setCategory('Web Series');toggleDrawer()">Web Series</a><a href="#about" onclick="toggleDrawer()">About Us</a></div>
-<div class="searchbar" id="searchbar"><input id="searchInput" placeholder="Search movies, series, Hindi..." oninput="render()"></div>
+
 <main>
-<div class="searchhero"><input id="searchInput2" placeholder="Search movies,series,hindi" oninput="document.getElementById('searchInput').value=this.value;render()"></div>
+<div class="searchhero advanced-search">
+<input id="searchInput" placeholder="Search title, series or episode..." oninput="render()">
+<div class="search-filters"><select id="filterLanguage" onchange="render()"><option value="">All languages</option><option>Hindi</option><option>English</option><option>Tamil</option><option>Telugu</option><option>Malayalam</option><option>Kannada</option></select>
+<select id="filterYear" onchange="render()"><option value="">All years</option></select>
+<select id="filterType" onchange="render()"><option value="">Movies & Series</option><option value="movie">Movies</option><option value="episode">Series Episodes</option></select></div></div>
 <div class="quicklinks"><a href="#catalog">ANIME</a><a href="#catalog">DESI VIDEOS</a><a href="#catalog">MOVIES</a><a href="#about">JOIN TELEGRAM</a></div>
 <div class="categories" id="categories">
 <button class="active" onclick="setCategory('All')">ALL</button><button onclick="setCategory('18+')">18+</button><button onclick="setCategory('Bollywood')">BOLLYWOOD</button><button onclick="setCategory('Dual Audio')">DUAL AUDIO</button><button onclick="setCategory('Hindi')">HINDI</button><button onclick="setCategory('Hollywood')">HOLLYWOOD</button><button onclick="setCategory('South Indian')">SOUTH INDIAN</button><button onclick="setCategory('Tamil')">TAMIL</button><button onclick="setCategory('Telugu')">TELUGU</button><button onclick="setCategory('Web Series')">WEB SERIES</button>
@@ -105,12 +109,21 @@ function fileDownload(fileId){if(!fileId)return '#';if(/^https?:\/\//i.test(file
 async function loadMovies(){
   try{
     const result=await tablesDB.listRows({databaseId:DATABASE_ID,tableId:TABLE_ID,queries:[Query.orderDesc('$createdAt'),Query.limit(100)]});
-    allMovies=result.rows||[]; render();
+    allMovies=result.rows||[]; populateYearFilter(); render();
   }catch(error){console.error(error);statusMsg('Could not load movies: '+(error.message||'Check Appwrite table permissions and column setup.'));render()}
 }
+
+function populateYearFilter(){const el=document.getElementById('filterYear');if(!el)return;const selected=el.value;const years=[...new Set(allMovies.map(m=>String(m.year||'')).filter(Boolean))].sort((a,b)=>Number(b)-Number(a));el.innerHTML='<option value="">All years</option>'+years.map(y=>`<option value="${esc(y)}">${esc(y)}</option>`).join('');el.value=selected;}
+
 function render(){
-  const q=(document.getElementById('searchInput')?.value||document.getElementById('searchInput2')?.value||'').toLowerCase();
-  const list=allMovies.filter(m=>(activeCategory==='All'||m.category===activeCategory)&&String(m.title||'').toLowerCase().includes(q));
+  const q=(document.getElementById('searchInput')?.value||'').trim().toLowerCase();
+  const lang=(document.getElementById('filterLanguage')?.value||'').toLowerCase();
+  const year=(document.getElementById('filterYear')?.value||'');
+  const type=(document.getElementById('filterType')?.value||'');
+  const list=allMovies.filter(m=>{
+    const hay=[m.title,m.series_title,m.episode_title,m.description,m.category,m.language,m.quality,m.year].join(' ').toLowerCase();
+    return (activeCategory==='All'||m.category===activeCategory) && (!q||hay.includes(q)) && (!lang||String(m.language||'').toLowerCase()===lang) && (!year||String(m.year||'')===year) && (!type||String(m.content_type||'movie')===type);
+  });
   const grid=document.getElementById('movieGrid');
   grid.innerHTML=list.map(m=>{const posterUrl=fileView(m.poster);const isEpisode=m.content_type==='episode';const episodeLabel=isEpisode?` · S${String(m.season||1).padStart(2,'0')}E${String(m.episode_number||1).padStart(2,'0')}`:'';const displayTitle=isEpisode?`${m.title||''}${episodeLabel} - ${m.episode_title||'Episode'}`:m.title;return `<article class="movie"><div class="poster">${posterUrl?`<img src="${esc(posterUrl)}" alt="${esc(displayTitle)} poster">`:`<span>${esc(displayTitle)}</span>`}</div><h3>${esc(displayTitle)}${m.year?' ('+esc(m.year)+')':''}</h3><div class="meta">${isEpisode?'WEB SERIES EPISODE':'MOVIE'} · ${esc(m.language||'')} ${m.quality?' · '+esc(m.quality):''} · ${esc(m.category||'')}</div><div class="movie-actions"><button class="watch" onclick="watchMovie('${esc(m.$id)}')">WATCH</button><a class="download" href="${esc(fileDownload(m.download_url||m.video_url))}" target="_blank" rel="noopener">DOWNLOAD</a></div></article>`}).join('');
   document.getElementById('empty').style.display=list.length?'none':'block';

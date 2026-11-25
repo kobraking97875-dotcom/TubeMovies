@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101318"><title>TubeMovies — Owner Panel</title>
+<style>
+:root{--bg:#0b1020;--head:#151d35;--red:#7657ff;--green:#16c7b7;--gold:#ffb86b;--muted:#aeb8d0}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#f7f7f7;font-family:Arial,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--head);height:92px;display:flex;align-items:center;justify-content:space-between;padding:0 25px;box-shadow:0 2px 12px #0008}
+.menu,.search-toggle{background:none;border:2px solid #eee;color:#fff;border-radius:5px;font-size:27px;width:54px;height:54px;cursor:pointer}
+.brand{font-size:clamp(25px,5vw,48px);font-weight:1000;letter-spacing:1px;color:#8ee8df;text-shadow:2px 2px #263b75,0 0 14px #7657ff}
+.search-toggle{border:0;font-size:34px}.searchbar{display:none;background:#171a20;padding:18px 5%;}.searchbar.open{display:flex}.searchbar input{width:100%;padding:15px;border-radius:8px;border:1px solid #999;background:#0e1015;color:#fff;font-size:17px}
+.header-tools{display:flex;align-items:center;gap:8px;position:relative}
+.dots-toggle{background:none;border:0;color:#fff;font-size:35px;line-height:1;width:42px;height:50px;cursor:pointer}
+.more-menu{display:none;position:absolute;right:0;top:58px;min-width:205px;background:#1b2029;border:1px solid #465064;border-radius:9px;padding:8px;box-shadow:0 10px 28px #000b;z-index:15}
+.more-menu.open{display:block}
+.more-menu button{width:100%;text-align:left;background:transparent;border:0;color:#fff;padding:13px 12px;border-radius:6px;font-size:15px;cursor:pointer}
+.more-menu button:hover{background:#303847}
+.drawer{display:none;position:fixed;inset:0 auto 0 0;width:min(78%,340px);z-index:10;background:#11151cF5;padding:24px;box-shadow:0 0 0 100vmax #0009}
+.drawer.open{display:block}.drawer button{float:right;background:none;color:white;border:0;font-size:30px}.drawer a{display:block;color:#fff;text-decoration:none;font-size:21px;margin:30px 0}.drawer a:hover{color:var(--green)}
+main{max-width:1200px;margin:auto;padding:20px 22px 50px}
+.searchhero{margin:8px 0 28px}.searchhero input,.search-filters select{padding:15px 16px;border:2px solid #59647a;border-radius:7px;background:#101116;color:#fff;font-size:17px}.searchhero>input{width:100%}.search-filters{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}.search-filters select{flex:1;min-width:130px}
+.quicklinks,.categories{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin:18px 0 26px}
+.quicklinks a,.categories button{color:white;text-decoration:none;border:0;border-radius:12px;background:linear-gradient(135deg,#7657ff,#4d8dff);padding:17px 22px;font-weight:800;font-size:clamp(13px,2vw,18px);cursor:pointer;box-shadow:0 8px 22px #7657ff33}
+.quicklinks a:nth-child(1),.quicklinks a:nth-child(3){background:#087f86}.quicklinks a:nth-child(2){background:#7657ff}.quicklinks a:nth-child(4){background:#2456a6}
+.categories button.active{outline:3px solid #fff}
+.section-title{font-size:25px;margin:28px 0 18px;border-left:5px solid var(--green);padding-left:12px}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:24px 22px}
+.movie{min-width:0}.poster{width:100%;aspect-ratio:2/2.8;object-fit:cover;border:8px solid transparent;border-image:linear-gradient(135deg,#7657ff,#16c7b7) 1;background:linear-gradient(145deg,#172b55,#174e59);display:flex;align-items:center;justify-content:center;text-align:center;padding:12px;color:white;font-size:25px;font-weight:900;text-shadow:0 2px 8px #000}
+.poster img{width:100%;height:100%;object-fit:cover}.movie h3{font-size:clamp(16px,2vw,23px);line-height:1.35;font-weight:600;margin:18px 0 10px}
+.movie .meta{font-size:13px;color:var(--muted);margin-bottom:12px}.movie-actions{display:flex;gap:8px;flex-wrap:wrap}.movie-actions button{background:#222831;border:1px solid #555;color:white;padding:9px 12px;border-radius:6px;cursor:pointer}
+.movie-actions .watch{background:#7657ff;border-color:#7657ff}
+.movie-actions .download{display:inline-block;text-decoration:none;text-align:center;background:#087f86;border:1px solid #087f86;color:#fff;padding:9px 12px;border-radius:6px;font-size:13px;font-weight:700}
+.pager{display:flex;justify-content:center;gap:12px;align-items:center;margin:40px 0}.pager button{background:#222;color:#fff;border:1px solid #444;padding:16px 22px;border-radius:8px}
+.empty{text-align:center;padding:40px;color:#aaa;display:none}
+footer{background:#15151d;text-align:center;padding:30px 18px;margin:0 22px 22px;line-height:2;color:#ddd}
+.modal{display:none;position:fixed;inset:0;background:#000d;z-index:20;align-items:center;justify-content:center;padding:15px}.modal.open{display:flex}.box{background:#1c222c;padding:22px;border-radius:12px;width:min(95%,520px);max-height:90vh;overflow:auto}.box input,.box textarea,.box select{display:block;width:100%;padding:12px;margin:10px 0;background:#10141b;border:1px solid #555;border-radius:6px;color:#fff}.box button{padding:11px 16px;background:var(--red);border:0;color:#fff;border-radius:6px;margin:5px;cursor:pointer}.box .secondary{background:#343d4b}.close{float:right;background:none!important;font-size:24px;padding:0!important}
+#adminArea{display:none}.note{color:#bac3d0;font-size:13px;line-height:1.5}.status{color:#a9e6a9;min-height:20px}.progress-wrap{display:none;margin:12px 0;padding:10px;background:#10141b;border:1px solid #465064;border-radius:8px}.progress-track{height:12px;background:#303847;border-radius:20px;overflow:hidden}.progress-fill{height:100%;width:0%;background:linear-gradient(90deg,#7657ff,#16c7b7);transition:width .15s}.progress-label{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#dce5f5;margin-bottom:8px}
+video{width:100%;max-height:65vh;background:#000}
+@media(max-width:850px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:600px){header{height:82px;padding:0 15px}.menu{width:48px;height:48px}.search-toggle{width:42px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 16px}main{padding:16px 15px 40px}.poster{border-width:7px}.movie h3{margin-top:14px}.quicklinks a,.categories button{padding:15px 14px}footer{margin:0 12px 12px}}
+
+.footer-links{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-bottom:18px}
+.footer-links a{color:#f1f1f1;text-decoration:none;font-weight:600}
+.footer-links a:hover{color:#16c7b7}
+
+/* Dedicated owner-only page layout; it is not linked from the public website. */
+body.owner-page header,body.owner-page .drawer,body.owner-page .searchbar,body.owner-page main,body.owner-page footer,body.owner-page #watchModal{display:none!important}
+body.owner-page #adminModal{display:flex!important;position:static;min-height:100vh;background:var(--bg);padding:20px;align-items:flex-start;justify-content:center}
+body.owner-page #adminModal .box{width:min(100%,900px);max-height:none;margin:0 auto;background:#151d35;border:1px solid #465064}
+body.owner-page #adminModal .close{display:none!important}
+body.owner-page #adminModal h2:before{content:'OWNER PANEL · ';color:#8ee8df}
+body.owner-page #adminArea{margin-top:18px}
+</style>
+</head>
+<body class="owner-page">
+<header><button class="menu" onclick="toggleDrawer()">☰</button><div class="brand">TubeMovies</div><div class="header-tools">
+
+<button class="dots-toggle" aria-label="More options" onclick="toggleMoreMenu()">⋮</button>
+<div class="more-menu" id="moreMenu"><button onclick="toggleMoreMenu();document.getElementById('drawer').classList.add('open')">Menu</button></div>
+</div></header>
+<div class="drawer" id="drawer"><button onclick="toggleDrawer()">×</button><a href="#" onclick="toggleDrawer()">Home</a><a href="#catalog" onclick="toggleDrawer()">Movies</a><a href="#catalog" onclick="setCategory('Web Series');toggleDrawer()">Web Series</a><a href="#about" onclick="toggleDrawer()">About Us</a></div>
+
+<main>
+<div class="searchhero advanced-search">
+<input id="searchInput" placeholder="Search title, series or episode..." oninput="render()">
+<div class="search-filters"><select id="filterLanguage" onchange="render()"><option value="">All languages</option><option>Hindi</option><option>English</option><option>Tamil</option><option>Telugu</option><option>Malayalam</option><option>Kannada</option></select>
+<select id="filterYear" onchange="render()"><option value="">All years</option></select>
+<select id="filterType" onchange="render()"><option value="">Movies & Series</option><option value="movie">Movies</option><option value="episode">Series Episodes</option></select></div></div>
+<div class="quicklinks"><a href="#catalog">ANIME</a><a href="#catalog">DESI VIDEOS</a><a href="#catalog">MOVIES</a><a href="#about">JOIN TELEGRAM</a></div>
+<div class="categories" id="categories">
+<button class="active" onclick="setCategory('All')">ALL</button><button onclick="setCategory('18+')">18+</button><button onclick="setCategory('Bollywood')">BOLLYWOOD</button><button onclick="setCategory('Dual Audio')">DUAL AUDIO</button><button onclick="setCategory('Hindi')">HINDI</button><button onclick="setCategory('Hollywood')">HOLLYWOOD</button><button onclick="setCategory('South Indian')">SOUTH INDIAN</button><button onclick="setCategory('Tamil')">TAMIL</button><button onclick="setCategory('Telugu')">TELUGU</button><button onclick="setCategory('Web Series')">WEB SERIES</button>
+</div>
+<h2 class="section-title" id="catalog">Latest Movies & Episodes</h2>
+<div class="grid" id="movieGrid"></div><div class="empty" id="empty">No movies found. Try another search.</div>
+<div class="pager"><button onclick="window.scrollTo({top:0,behavior:'smooth'})">BACK TO TOP ↑</button></div>
+</main>
+<footer id="about">
+  <div class="footer-links">
+    <a href="index.html">Home</a>
+    <a href="contact.html">Contact Us</a>
+    <a href="about.html">About Us</a>
+    <a href="disclaimer.html">Disclaimer</a>
+  </div>
+  <div>© 2026 TubeMovies · Movie catalogue and video platform</div>
+</footer>
+<div class="modal open" id="adminModal"><div class="box"><button class="close" onclick="closeModal('adminModal')">×</button><h2>Admin Login / Upload</h2><p class="note">Sign in with your TubeMovies Appwrite Admin account. Only the configured admin can publish videos.</p><input id="email" type="email" placeholder="Admin email"><input id="password" type="password" placeholder="Password"><button onclick="loginAdmin()">Login</button><button class="secondary" onclick="logoutAdmin()">Logout</button><div id="adminArea"><hr><h3>Upload a Movie or Series Episode</h3><select id="contentType" onchange="toggleEpisodeFields()"><option value="movie">Movie</option><option value="episode">Web Series Episode</option></select><input id="movieTitle" placeholder="Movie title / Series name"><div id="episodeFields" style="display:none"><input id="episodeTitle" placeholder="Episode title"><input id="seasonNumber" type="number" min="1" placeholder="Season number (e.g. 1)"><input id="episodeNumber" type="number" min="1" placeholder="Episode number (e.g. 1)"></div><select id="movieCategory"><option>Hindi</option><option>Bollywood</option><option>Hollywood</option><option>Dual Audio</option><option>South Indian</option><option>Tamil</option><option>Telugu</option><option>Web Series</option></select><input id="movieYear" type="number" placeholder="Year (e.g. 2026)"><input id="movieLanguage" placeholder="Language (e.g. Hindi)"><input id="movieQuality" placeholder="Quality (e.g. 720p)"><textarea id="movieDescription" rows="3" placeholder="Description (optional)"></textarea><input id="posterFile" type="file" accept="image/*"><input id="videoFile" type="file" accept="*/*"><p class="note">Choose video from your phone Files app: Internal storage, Movies, Download or SD card. If a photo picker opens, use its menu and choose Browse / Files.</p><p class="note">Large video files may take time and require sufficient storage/bandwidth. Use only content you have rights to publish.</p><div class="progress-wrap" id="uploadProgress"><div class="progress-label"><span id="progressText">Uploading…</span><strong id="progressPercent">0%</strong></div><div class="progress-track"><div class="progress-fill" id="progressFill"></div></div></div><button id="uploadStart" onclick="uploadMovie()">Upload & Publish</button><button class="secondary" id="pauseUpload" onclick="pauseUploadNow()" disabled>Pause</button><button class="secondary" id="resumeUpload" onclick="resumeUploadNow()" disabled>Resume saved upload</button><button class="secondary" id="cancelUpload" onclick="cancelUploadNow()" disabled>Cancel upload</button></div><div class="status" id="status"></div><p class="note">Video uploads use Cloudflare R2 multipart transfer (up to 100 GB per video). Posters still use Appwrite Storage and must fit its file-size limit. Upload only content you own or are authorised to distribute.</p></div></div>
+<div class="modal" id="watchModal"><div class="box"><button class="close" onclick="closeModal('watchModal')">×</button><h2 id="watchTitle">Watch</h2><video id="player" controls playsinline></video></div></div>
+<script src="https://cdn.jsdelivr.net/npm/appwrite@29.0.0"></script>
+<script>
+// TubeMovies Appwrite configuration. These are public project identifiers, not secret keys.
+const APPWRITE_ENDPOINT = "https://sgp.cloud.appwrite.io/v1";
+const APPWRITE_PROJECT_ID = "6b056a1d00068f2e87ba";
+const DATABASE_ID = "6b056c4100002013df8a";
+const TABLE_ID = "6b056bd7002eeb65bc10";
+const BUCKET_ID = "6b056f9f003cbb25d977";
+const ADMIN_USER_ID = "6b0575fe00266689ca80";
+const R2_WORKER_URL = "https://tubemovies-upload.tubemoviessupport-com.workers.dev";
+const R2_PUBLIC_BASE_URL = "https://pub-2d8fdc9ce35f489299d6464ef0d725d3.r2.dev";
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024 * 1024;
+const R2_PART_BYTES = 64 * 1024 * 1024;
+const client = new Appwrite.Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID);
+const account = new Appwrite.Account(client);
+const tablesDB = new Appwrite.TablesDB(client);
+const storage = new Appwrite.Storage(client);
+const ID = Appwrite.ID, Query = Appwrite.Query;
+let allMovies=[], activeCategory='All', isAdmin=false, currentUser=null;
+function toggleEpisodeFields(){const ep=document.getElementById('contentType').value==='episode';document.getElementById('episodeFields').style.display=ep?'block':'none'}
+function toggleDrawer(){document.getElementById('drawer').classList.toggle('open')}
+function toggleMoreMenu(){document.getElementById('moreMenu').classList.toggle('open')}
+function openAdmin(){document.getElementById('adminModal').classList.add('open');restoreAdminSession()}
+function closeModal(id){document.getElementById(id).classList.remove('open');if(id==='watchModal'){let v=document.getElementById('player');v.pause();v.removeAttribute('src');v.load()}}
+function setCategory(c){activeCategory=c;document.querySelectorAll('.categories button').forEach(b=>b.classList.toggle('active',b.textContent.trim().toLowerCase()===(c==='All'?'all':c.toLowerCase())));render()}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function fileView(fileId){if(!fileId)return '';if(/^https?:\/\//i.test(fileId))return fileId;return storage.getFileView({bucketId:BUCKET_ID,fileId})}
+function fileDownload(fileId){if(!fileId)return '#';if(/^https?:\/\//i.test(fileId))return fileId;return storage.getFileDownload({bucketId:BUCKET_ID,fileId})}
+async function loadMovies(){
+  try{
+    const result=await tablesDB.listRows({databaseId:DATABASE_ID,tableId:TABLE_ID,queries:[Query.orderDesc('$createdAt'),Query.limit(100)]});
+    allMovies=result.rows||[]; populateYearFilter(); render();
+  }catch(error){console.error(error);statusMsg('Could not load movies: '+(error.message||'Check Appwrite table permissions and column setup.'));render()}
+}
+
+function populateYearFilter(){const el=document.getElementById('filterYear');if(!el)return;const selected=el.value;const years=[...new Set(allMovies.map(m=>String(m.year||'')).filter(Boolean))].sort((a,b)=>Number(b)-Number(a));el.innerHTML='<option value="">All years</option>'+years.map(y=>`<option value="${esc(y)}">${esc(y)}</option>`).join('');el.value=selected;}
+
+function render(){
+  const q=(document.getElementById('searchInput')?.value||'').trim().toLowerCase();
+  const lang=(document.getElementById('filterLanguage')?.value||'').toLowerCase();
+  const year=(document.getElementById('filterYear')?.value||'');
+  const type=(document.getElementById('filterType')?.value||'');
+  const list=allMovies.filter(m=>{
+    const hay=[m.title,m.series_title,m.episode_title,m.description,m.category,m.language,m.quality,m.year].join(' ').toLowerCase();
+    return (activeCategory==='All'||m.category===activeCategory) && (!q||hay.includes(q)) && (!lang||String(m.language||'').toLowerCase()===lang) && (!year||String(m.year||'')===year) && (!type||String(m.content_type||'movie')===type);
+  });
+  const grid=document.getElementById('movieGrid');
+  grid.innerHTML=list.map(m=>{const posterUrl=fileView(m.poster);const isEpisode=m.content_type==='episode';const episodeLabel=isEpisode?` · S${String(m.season||1).padStart(2,'0')}E${String(m.episode_number||1).padStart(2,'0')}`:'';const displayTitle=isEpisode?`${m.title||''}${episodeLabel} - ${m.episode_title||'Episode'}`:m.title;return `<article class="movie"><div class="poster">${posterUrl?`<img src="${esc(posterUrl)}" alt="${esc(displayTitle)} poster">`:`<span>${esc(displayTitle)}</span>`}</div><h3>${esc(displayTitle)}${m.year?' ('+esc(m.year)+')':''}</h3><div class="meta">${isEpisode?'WEB SERIES EPISODE':'MOVIE'} · ${esc(m.language||'')} ${m.quality?' · '+esc(m.quality):''} · ${esc(m.category||'')}</div><div class="movie-actions"><button class="watch" onclick="watchMovie('${esc(m.$id)}')">WATCH</button><a class="download" href="${esc(fileDownload(m.download_url||m.video_url))}" target="_blank" rel="noopener">DOWNLOAD</a></div></article>`}).join('');
+  document.getElementById('empty').style.display=list.length?'none':'block';
+}
+async function restoreAdminSession(){
+  try{const user=await account.get();if(user.$id===ADMIN_USER_ID){currentUser=user;isAdmin=true;document.getElementById('adminArea').style.display='block';document.getElementById('password').value='';statusMsg('Admin session restored. You are still signed in.');return true;}
+  }catch(e){}
+  currentUser=null;isAdmin=false;document.getElementById('adminArea').style.display='none';return false;
+}
+async function loginAdmin(){
+  const emailValue=document.getElementById('email').value.trim(), passwordValue=document.getElementById('password').value;
+  if(!emailValue||!passwordValue){statusMsg('Enter your admin email and password.');return}
+  try{
+    await account.createEmailPasswordSession({email:emailValue,password:passwordValue});
+    currentUser=await account.get();
+    if(currentUser.$id!==ADMIN_USER_ID){await account.deleteSession({sessionId:'current'});currentUser=null;isAdmin=false;statusMsg('This account is not the authorised TubeMovies admin.');return}
+    isAdmin=true;document.getElementById('adminArea').style.display='block';statusMsg('Admin signed in successfully.');
+  }catch(error){statusMsg('Login failed: '+(error.message||'Check email and password.'))}
+}
+async function logoutAdmin(){try{await account.deleteSession({sessionId:'current'})}catch(e){}isAdmin=false;currentUser=null;document.getElementById('adminArea').style.display='none';document.getElementById('password').value='';statusMsg('Signed out.')}
+function statusMsg(t){document.getElementById('status').textContent=t}
+function updateUploadProgress(doneBytes,currentBytes,totalBytes,label){const total=Math.max(1,totalBytes),done=Math.min(total,doneBytes+currentBytes),pct=Math.min(100,done/total*100);const wrap=document.getElementById('uploadProgress');wrap.style.display='block';document.getElementById('progressFill').style.width=pct.toFixed(2)+'%';document.getElementById('progressPercent').textContent=Math.floor(pct)+'%';document.getElementById('progressText').textContent=`${label||'Uploading'} · ${(done/1024/1024/1024).toFixed(2)} GB / ${(total/1024/1024/1024).toFixed(2)} GB`; }
+function uploadPartXHR(url,headers,blob,signal,onProgress){return new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();xhr.open('POST',url);Object.entries(headers).forEach(([k,v])=>xhr.setRequestHeader(k,v));xhr.upload.onprogress=e=>{if(e.lengthComputable)onProgress(e.loaded)};xhr.onload=()=>{let data={};try{data=JSON.parse(xhr.responseText||'{}')}catch(e){};if(xhr.status>=200&&xhr.status<300)resolve(data);else reject(new Error(data.error||`Part upload failed (${xhr.status})`))};xhr.onerror=()=>reject(new Error('Network error while uploading part'));xhr.onabort=()=>reject(new DOMException('Upload paused','AbortError'));if(signal){if(signal.aborted){xhr.abort();return}signal.addEventListener('abort',()=>xhr.abort(),{once:true})}xhr.send(blob);});}
+const UPLOAD_STATE_KEY = 'tubemovies_r2_multipart_v1';
+const UPLOAD_PARALLEL_PARTS = 5; // Five simultaneous parts; no fixed KB/s or MB/s bandwidth throttle
+let uploadPaused = false, uploadCancelled = false, activePartControllers = new Set(), uploadRunning = false;
+function getSavedUpload(){try{return JSON.parse(localStorage.getItem(UPLOAD_STATE_KEY)||'null')}catch(e){return null}}
+function saveUploadState(state){localStorage.setItem(UPLOAD_STATE_KEY,JSON.stringify(state));}
+function setUploadControls(running, saved){
+  document.getElementById('uploadStart').disabled=running;
+  document.getElementById('pauseUpload').disabled=!running;
+  document.getElementById('resumeUpload').disabled=running||!saved;
+  document.getElementById('cancelUpload').disabled=!saved;
+}
+function pauseUploadNow(){uploadPaused=true;for(const c of activePartControllers)c.abort();statusMsg('Pausing active parts…');}
+async function waitWhilePaused(){while(uploadPaused&&!uploadCancelled)await new Promise(r=>setTimeout(r,250));if(uploadCancelled)throw new Error('Upload cancelled');}
+async function cancelUploadNow(){
+  const st=getSavedUpload(); uploadCancelled=true; uploadPaused=false;
+  for(const c of activePartControllers)c.abort();
+  if(st){try{const jwt=(await account.createJWT()).jwt;await fetch(`${R2_WORKER_URL}/?action=abort`,{method:'POST',headers:{'Content-Type':'application/json','X-Appwrite-JWT':jwt},body:JSON.stringify({key:st.key,uploadId:st.uploadId})})}catch(e){} }
+  localStorage.removeItem(UPLOAD_STATE_KEY);setUploadControls(false,false);statusMsg('Upload cancelled.');
+}
+async function uploadVideoToR2(file, resumeState=null){
+  const jwt=(await account.createJWT()).jwt, authHeaders={'X-Appwrite-JWT':jwt};
+  let state=resumeState;
+  if(!state){
+    const init=await fetch(`${R2_WORKER_URL}/?action=init`,{method:'POST',headers:{...authHeaders,'Content-Type':'application/json'},body:JSON.stringify({filename:file.name,contentType:file.type||'application/octet-stream',size:file.size})});
+    const data=await init.json();if(!init.ok)throw new Error(data.error||'Could not start R2 upload');
+    state={key:data.key,uploadId:data.uploadId,parts:[],fileName:file.name,fileSize:file.size,lastModified:file.lastModified,partBytes:R2_PART_BYTES};saveUploadState(state);
+  }
+  if(state.fileName!==file.name||state.fileSize!==file.size||state.lastModified!==file.lastModified)throw new Error('Please select the exact same file used for the saved upload.');
+  uploadCancelled=false;uploadRunning=true;activePartControllers=new Set();setUploadControls(true,true);
+  const total=Math.ceil(file.size/R2_PART_BYTES), done=new Set(state.parts.map(p=>p.partNumber));
+  const inflight=new Map();
+  const partSize=n=>Math.min(R2_PART_BYTES,Math.max(0,file.size-(n-1)*R2_PART_BYTES));
+  const completedBytes=()=>state.parts.reduce((sum,p)=>sum+partSize(p.partNumber),0);
+  const renderProgress=()=>{let active=0;for(const v of inflight.values())active+=v;updateUploadProgress(completedBytes(),active,file.size,`Uploading ${state.parts.length}/${total} parts · ${UPLOAD_PARALLEL_PARTS} parallel connections`)};
+  let nextPart=1, failure=null;
+  const worker=async()=>{
+    while(true){
+      await waitWhilePaused();if(uploadCancelled)throw new Error('Upload cancelled');
+      while(nextPart<=total&&done.has(nextPart))nextPart++;
+      if(nextPart>total)return;
+      const n=nextPart++;const begin=(n-1)*R2_PART_BYTES,end=Math.min(begin+R2_PART_BYTES,file.size),blob=file.slice(begin,end);
+      let uploaded=false;
+      while(!uploaded){
+        await waitWhilePaused();if(uploadCancelled)throw new Error('Upload cancelled');
+        const controller=new AbortController();activePartControllers.add(controller);inflight.set(n,0);
+        try{
+          const data=await uploadPartXHR(`${R2_WORKER_URL}/?action=part&key=${encodeURIComponent(state.key)}&uploadId=${encodeURIComponent(state.uploadId)}&partNumber=${n}`,authHeaders,blob,controller.signal,loaded=>{inflight.set(n,loaded);renderProgress()});
+          state.parts=state.parts.filter(p=>p.partNumber!==n);state.parts.push({partNumber:n,etag:data.etag});state.parts.sort((a,b)=>a.partNumber-b.partNumber);saveUploadState(state);done.add(n);uploaded=true;
+        }catch(e){
+          if(uploadCancelled)throw new Error('Upload cancelled');
+          if(uploadPaused){await waitWhilePaused();continue;}
+          throw e;
+        }finally{activePartControllers.delete(controller);inflight.delete(n);renderProgress()}
+      }
+      statusMsg(`Uploaded ${state.parts.length}/${total} parts (${Math.floor(completedBytes()/file.size*100)}%)`);
+    }
+  };
+  try{
+    renderProgress();
+    await Promise.all(Array.from({length:Math.min(UPLOAD_PARALLEL_PARTS,total)},()=>worker()));
+    await waitWhilePaused();statusMsg('All parts uploaded. Finishing video…');
+    const finish=await fetch(`${R2_WORKER_URL}/?action=complete`,{method:'POST',headers:{...authHeaders,'Content-Type':'application/json'},body:JSON.stringify({key:state.key,uploadId:state.uploadId,parts:state.parts})});
+    const result=await finish.json();if(!finish.ok)throw new Error(result.error||'Could not complete upload');
+    localStorage.removeItem(UPLOAD_STATE_KEY);setUploadControls(false,false);updateUploadProgress(file.size,0,file.size,'Upload complete');return `${R2_PUBLIC_BASE_URL}/${state.key}`;
+  }catch(e){setUploadControls(false,!!getSavedUpload());throw e;}
+  finally{uploadRunning=false;activePartControllers.clear();}
+}
+async function resumeUploadNow(){
+  const file=document.getElementById('videoFile').files[0],state=getSavedUpload();
+  if(!state){statusMsg('No saved upload found.');return;}
+  if(!file){statusMsg('Select the same video file again, then press Resume.');return;}
+  if(!isAdmin||!currentUser||currentUser.$id!==ADMIN_USER_ID){statusMsg('Please log in as Admin first.');return;}
+  uploadPaused=false;uploadCancelled=false;
+  try{const url=await uploadVideoToR2(file,state);statusMsg('Video upload completed: '+url+' . Re-enter details and publish if the page was refreshed.');}
+  catch(e){statusMsg(e.message||'Resume failed.');}
+}
+async function uploadMovie(){
+  if(!isAdmin||!currentUser||currentUser.$id!==ADMIN_USER_ID){statusMsg('Please sign in with the authorised admin account first.');return}
+  const title=document.getElementById('movieTitle').value.trim(),category=document.getElementById('movieCategory').value,contentType=document.getElementById('contentType').value;
+  const episodeTitle=document.getElementById('episodeTitle').value.trim(),season=Number(document.getElementById('seasonNumber').value)||null,episodeNumber=Number(document.getElementById('episodeNumber').value)||null;
+  const yearValue=Number(document.getElementById('movieYear').value),year=yearValue||null;
+  const language=document.getElementById('movieLanguage').value.trim(),quality=document.getElementById('movieQuality').value.trim(),description=document.getElementById('movieDescription').value.trim();
+  const poster=document.getElementById('posterFile').files[0],video=document.getElementById('videoFile').files[0];
+  if(!title||!video){statusMsg('Enter a title and choose a video file.');return}
+  const videoExt=(video.name.split('.').pop()||'').toLowerCase();
+  const allowedVideoExt=['mp4','m4v','mkv','mov','webm','avi','mpeg','mpg','3gp','ts'];
+  if(!(video.type.startsWith('video/')||allowedVideoExt.includes(videoExt))){statusMsg('Please choose a video file (MP4, MKV, MOV, WEBM, AVI, etc.).');return}
+  if(contentType==='episode'&&(!episodeTitle||!season||!episodeNumber)){statusMsg('For an episode, enter episode title, season number and episode number.');return}
+  if(video.size>MAX_VIDEO_BYTES){statusMsg('Video exceeds the 100 GB per-file limit.');return}
+  if(poster&&poster.size>50*1024*1024){statusMsg('Poster exceeds the current Appwrite file limit of 50 MB.');return}
+  let posterId=null,videoUrl=null;
+  try{
+    statusMsg('Starting secure Cloudflare R2 upload…');
+    videoUrl=await uploadVideoToR2(video,getSavedUpload());
+    if(poster){statusMsg('Uploading poster to Appwrite…');const uploadedPoster=await storage.createFile({bucketId:BUCKET_ID,fileId:ID.unique(),file:poster});posterId=uploadedPoster.$id}
+    statusMsg('Saving movie details…');
+    await tablesDB.createRow({databaseId:DATABASE_ID,tableId:TABLE_ID,rowId:ID.unique(),data:{title,year,language,poster:posterId||'',video_url:videoUrl,download_url:videoUrl,description,category,quality,content_type:contentType,series_title:contentType==='episode'?title:'',season:contentType==='episode'?season:null,episode_number:contentType==='episode'?episodeNumber:null,episode_title:contentType==='episode'?episodeTitle:''}});
+    ['movieTitle','movieYear','movieLanguage','movieQuality','movieDescription','videoFile','posterFile','episodeTitle','seasonNumber','episodeNumber'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('contentType').value='movie';toggleEpisodeFields();statusMsg('Published! Visitors can now watch and download this authorised title.');await loadMovies();
+  }catch(error){console.error(error);statusMsg('Upload/save failed: '+(error.message||'Check Worker, Appwrite permissions and R2 settings.'))}
+}
+function watchMovie(id){const m=allMovies.find(x=>x.$id===id);if(!m)return;document.getElementById('watchTitle').textContent=m.title;const v=document.getElementById('player');v.src=fileView(m.video_url);document.getElementById('watchModal').classList.add('open');v.play().catch(()=>{})}
+const initialSavedUpload=getSavedUpload();setUploadControls(false,!!initialSavedUpload);if(initialSavedUpload)statusMsg('A saved upload is available. Select the same file and press Resume saved upload.');
+loadMovies();
+restoreAdminSession();
+</script>
+
+</body></html>
